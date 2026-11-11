@@ -3,6 +3,8 @@
 An audio player for macOS and Windows, written in Rust with [egui](https://github.com/emilk/egui) / eframe.
 Plays MP3, FLAC, WAV, OGG, M4A and AAC.
 
+![LMP on macOS: the album grid with the library on the left and the queue on the right](assets/images/screenshot.png)
+
 ## Features
 
 - **Library** — add files or whole folders (with subfolders); browse by Artists, Albums and Songs,
