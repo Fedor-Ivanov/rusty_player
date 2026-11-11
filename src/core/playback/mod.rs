@@ -1,4 +1,4 @@
-//! Воспроизведение: плейлист, управление плеером, аудиопоток. Без egui.
+//! Playback: queue, player control, audio thread. No egui.
 
 mod audio;
 mod player;

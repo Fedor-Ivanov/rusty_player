@@ -21,7 +21,7 @@ pub enum AudioCmd {
     Resume,
     Stop,
     Seek(Duration),
-    /// Множитель громкости: 0.0 — тишина, 1.0 — исходная громкость
+    /// Volume multiplier: 0.0 — silence, 1.0 — original volume
     SetVolume(f32),
 }
 
@@ -30,8 +30,8 @@ pub enum AudioEvent {
     TrackEnded,
 }
 
-/// Запускает аудиопоток. `wake` он вызывает после каждого события: кто их получает,
-/// должен проснуться и забрать их, даже если окно скрыто и само не перерисовывается
+/// Starts the audio thread. It calls `wake` after each event: whoever receives them
+/// must wake up and take them, even if the window is hidden and doesn't redraw itself
 pub fn spawn_audio_thread(
     position_ms: Arc<AtomicU64>,
     wake: impl Fn() + Send + 'static,
@@ -40,12 +40,12 @@ pub fn spawn_audio_thread(
     let (event_tx, event_rx) = mpsc::channel::<AudioEvent>();
 
     thread::spawn(move || {
-        // Устройство должно жить всё время воспроизведения.
+        // The device must live for the whole playback.
         let device = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Could not open the audio device: {e}"));
 
         let mut player: Option<AudioPlayer> = None;
-        // Громкость переживает смену трека: каждый трек играет через новый плеер
+        // Volume survives a track change: each track plays through a new player
         let mut volume = 1.0;
 
         loop {

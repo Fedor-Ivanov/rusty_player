@@ -1,4 +1,4 @@
-//! Исполнители: сетка всех исполнителей и профиль одного — шапка и его альбомы.
+//! Artists: a grid of all artists and a single artist's profile — header and their albums.
 
 use eframe::egui::{self, Align, Align2, FontId, Label, Rect, RichText, Sense, Ui, vec2};
 
@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-/// Заглушка картинки исполнителя: круг с первой буквой имени. При наведении круг светлеет
+/// Artist image placeholder: a circle with the first letter of the name. Lightens on hover
 pub(crate) fn paint_artist_placeholder(ui: &Ui, rect: Rect, name: &str, hover: f32) {
     let painter = ui.painter();
     painter.circle_filled(
@@ -46,7 +46,7 @@ pub(crate) fn paint_artist_placeholder(ui: &Ui, rect: Rect, name: &str, hover: f
     );
 }
 
-/// Картинка исполнителя кругом; пока её нет (ищется или не нашлась) — заглушка с буквой
+/// Artist image as a circle; while there's none (being looked up or not found) — a letter placeholder
 fn paint_artist_image(
     ui: &Ui,
     rect: Rect,
@@ -66,7 +66,7 @@ fn paint_artist_image(
         ArtistImage::Searching | ArtistImage::Missing => Cover::Missing,
     };
     if let Cover::Ready(..) = cover {
-        // Скругление — половина стороны: круг. Больше 255 скругление не бывает
+        // Rounding is half the side: a circle. Rounding can't exceed 255
         let radius = (rect.width() / 2.0).min(255.0) as u8;
         components::paint_cover(ui, rect, cover, radius);
         return;
@@ -75,8 +75,8 @@ fn paint_artist_image(
 }
 
 impl PlayerApp {
-    /// Исполнители сеткой: картинка (фото, а пока его нет — заглушка с буквой) и имя.
-    /// Клик по исполнителю открывает его профиль
+    /// Artists as a grid: image (photo, or a letter placeholder until there is one) and name.
+    /// Clicking an artist opens their profile
     pub(crate) fn render_artists(&mut self, ui: &mut Ui) {
         self.core.refresh_groups();
         let artists = &self.core.groups.artists;
@@ -84,7 +84,7 @@ impl PlayerApp {
             placeholder(ui, t().library_empty);
             return;
         }
-        // Показанные исполнители — номера в `groups.artists`: поиск по имени
+        // Shown artists — indices into `groups.artists`: search by name
         let query = normalized_query(&self.search.query);
         let shown: Vec<usize> = (0..artists.len())
             .filter(|&index| contains_query(&artists[index].name, &query))
@@ -93,13 +93,13 @@ impl PlayerApp {
             placeholder(ui, t().no_results);
             return;
         }
-        // Имя — по центру под круглой картинкой. Сетка заимствует исполнителей —
-        // действие из меню запоминаем и выполняем после неё. Номера плиток относятся
-        // к библиотеке и запросу — при их изменении выделение сбрасывается
+        // The name is centered under the round image. The grid borrows the artists —
+        // a menu action is remembered and performed after it. Tile indices belong
+        // to the library and the query — when they change the selection is reset
         self.artists_grid
             .set_scope(&format!("{}/{query}", self.core.library.revision()));
         let mut action = None;
-        // Плейлисты для подменю «Add to playlist ›»
+        // Playlists for the "Add to playlist ›" submenu
         let playlists = self.playlist_entries();
         let (core, covers) = (&mut self.core, &mut self.covers);
         let response = self.artists_grid.show(
@@ -109,7 +109,7 @@ impl PlayerApp {
             Align::Center,
             self.focus == ListFocus::Grid,
             |ui, index, image_rect, tile| {
-                // Показанные на экране ищутся первыми — см. `ArtistImages`
+                // Those shown on screen are looked up first — see `ArtistImages`
                 let name = core.groups.artists[shown[index]].name.clone();
                 let image = core.artist_image(&name);
                 paint_artist_image(ui, image_rect, covers, image, &name, tile.hover);
@@ -134,7 +134,7 @@ impl PlayerApp {
                 self.core.groups.artists[shown[index]].name.clone(),
             )));
         } else if let Some(action) = action {
-            // Исполнители — в порядке сетки, их треки — альбом за альбомом
+            // Artists — in grid order, their tracks — album by album
             let names: Vec<String> = self
                 .artists_grid
                 .selection()
@@ -149,18 +149,18 @@ impl PlayerApp {
         }
     }
 
-    /// Профиль исполнителя: шапка и его альбомы сеткой
+    /// Artist profile: header and their albums as a grid
     pub(crate) fn render_artist_profile(&mut self, ui: &mut Ui, artist: &str) {
         self.render_artist_header(ui, artist);
         self.render_album_grid(ui, "artist_albums", Some(artist));
     }
 
-    /// Шапка профиля исполнителя: крупное имя, сколько альбомов и песен, кнопки
-    /// «Play» (заменить плейлист его треками и играть) и «Add to playlist»
+    /// Artist profile header: a large name, how many albums and songs, the
+    /// "Play" (replace the queue with their tracks and play) and "Add to playlist" buttons
     pub(crate) fn render_artist_header(&mut self, ui: &mut Ui, artist: &str) {
         self.core.refresh_groups();
         let tracks = self.artist_track_indices(artist);
-        // Сыграть можно только треки, чьи файлы на месте — их и считаем
+        // Only tracks whose files are present can be played — those are counted
         let playable = tracks
             .iter()
             .filter(|&&index| !self.core.library.is_missing(index))
@@ -179,7 +179,7 @@ impl PlayerApp {
             })
             .show(ui, |ui| {
                 ui.horizontal_top(|ui| {
-                    // Фото исполнителя кругом — размером с обложку на странице альбома
+                    // Artist photo as a circle — the size of the cover on the album page
                     let (image_rect, _) = ui.allocate_exact_size(
                         vec2(ALBUM_PAGE_COVER_SIZE, ALBUM_PAGE_COVER_SIZE),
                         Sense::hover(),
@@ -207,7 +207,7 @@ impl PlayerApp {
                         );
                         ui.add_space(12.0);
 
-                        // Без треков (все файлы пропали) кнопкам нечего делать
+                        // Without tracks (all files gone) the buttons have nothing to do
                         ui.add_enabled_ui(playable > 0, |ui| {
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 8.0;

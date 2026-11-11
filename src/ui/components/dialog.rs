@@ -1,4 +1,4 @@
-//! Модальный диалог подтверждения.
+//! Modal confirmation dialog.
 
 use eframe::egui::{self, Align, Id, Label, Layout, RichText, Stroke};
 
@@ -10,17 +10,17 @@ use crate::ui::{
 
 const DIALOG_WIDTH: f32 = 360.0;
 
-/// Ответ на диалог подтверждения
+/// Answer to a confirmation dialog
 pub enum Confirm {
-    /// Ещё не ответили
+    /// Not answered yet
     Pending,
     Confirmed,
-    /// «Cancel», Esc или клик мимо диалога
+    /// "Cancel", Esc or a click outside the dialog
     Cancelled,
 }
 
-/// Модальное окно в стиле приложения: поверх затемнённого окна, рамка как у плашек.
-/// Закрыть его просят Esc и клик мимо — см. `ModalResponse::should_close`
+/// A modal window in the app's style: over the dimmed window, with a border like the banners.
+/// Esc and a click outside ask to close it — see `ModalResponse::should_close`
 pub fn modal(id_salt: &str) -> egui::Modal {
     egui::Modal::new(Id::unique(id_salt))
         .backdrop_color(MODAL_BACKDROP)
@@ -33,9 +33,9 @@ pub fn modal(id_salt: &str) -> egui::Modal {
         )
 }
 
-/// Модальный диалог поверх затемнённого окна: заголовок, пояснение и две кнопки —
-/// «Cancel» и подтверждение `confirm_label` (красная: подтверждают удаление).
-/// Показывать каждый кадр, пока не ответили
+/// A modal dialog over the dimmed window: a title, an explanation and two buttons —
+/// "Cancel" and the `confirm_label` confirmation (red: it confirms deletion).
+/// Show every frame until answered
 pub fn confirm_dialog(
     ctx: &egui::Context,
     id_salt: &str,
@@ -56,7 +56,7 @@ pub fn confirm_dialog(
         ui.add_space(18.0);
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
-            // В right_to_left первой добавляется самая правая кнопка
+            // In right_to_left the rightmost button is added first
             if pill_button(ui, confirm_label, ButtonStyle::Destructive).clicked() {
                 answer = Confirm::Confirmed;
             }

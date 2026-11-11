@@ -1,5 +1,5 @@
-//! Плейлист между запусками: хранится в JSON в папке данных приложения рядом с библиотекой.
-//! Сохраняется сразу после каждого изменения, загружается при запуске.
+//! The queue between launches: stored as JSON in the app data folder next to the library.
+//! Saved right after each change, loaded at startup.
 
 use serde::{Deserialize, Serialize};
 use std::{fs, io::ErrorKind, path::PathBuf};
@@ -23,7 +23,7 @@ struct Stored {
 }
 
 pub struct QueueStore {
-    /// Куда сохранять; `None` — папка данных недоступна, плейлист живёт только до выхода
+    /// Where to save; `None` — the data folder is unavailable, the queue lives only until exit
     file: Option<PathBuf>,
 }
 
@@ -34,8 +34,8 @@ impl QueueStore {
         }
     }
 
-    /// Плейлист прошлого запуска. `Ok(None)` — сохранённого нет (первый запуск или файл
-    /// незнакомой версии): начинаем с пустого
+    /// The previous run's queue. `Ok(None)` — nothing saved (first launch or a file
+    /// of an unknown version): start empty
     pub fn load(&self) -> Result<Option<TrackList>, String> {
         let Some(file) = &self.file else {
             return Ok(None);

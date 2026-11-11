@@ -1,5 +1,5 @@
-//! Правая панель: очередь — что слушаем сейчас. Треки сюда попадают из медиатеки, плейлистов или
-//! кнопкой «+» мимо библиотеки. Внизу — shuffle и повтор.
+//! Right panel: the queue — what we're listening to now. Tracks get here from the library, playlists or
+//! via the "+" button bypassing the library. At the bottom — shuffle and repeat.
 
 use eframe::egui::{self, Align, Align2, FontId, Layout, Rect, Sense, Ui, UiBuilder, pos2, vec2};
 
@@ -16,23 +16,23 @@ use crate::{
     },
 };
 
-// Зазор между кнопками-иконками: повтора в нижнем блоке и кнопками в заголовке
+// Gap between icon buttons: repeat in the bottom block and buttons in the header
 const ICON_BUTTON_GAP: f32 = 4.0;
-/// Кнопок в заголовке очереди: очистить, сохранить, «+»
+/// Buttons in the queue header: clear, save, "+"
 const HEADER_BUTTONS: f32 = 3.0;
-/// Наименьший зазор между заголовком и кнопками
+/// Minimum gap between the title and the buttons
 const TITLE_BUTTONS_GAP: f32 = 8.0;
 
 impl PlayerApp {
     pub(crate) fn render_queue(&mut self, ui: &mut Ui) {
-        // Вся область панели — запоминаем до заголовка, чтобы заглушка встала по её центру
+        // The whole panel area — remembered before the title so the placeholder is centered in it
         let panel_rect = ui.max_rect();
         egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
-            // Рядом с заголовком — сколько треков в очереди; пустой — без числа:
-            // там и так «No tracks»
+            // Next to the title — how many tracks are in the queue; empty — no number:
+            // "No tracks" is shown there anyway
             let count = self.core.controller.player().track_list.tracks.len();
-            // Справа три кнопки — заголовок занимает место левее них и обрезается с «…»,
-            // а не уходит под кнопки
+            // Three buttons on the right — the title takes the space to their left and is truncated with "…",
+            // rather than going under the buttons
             let full = ui.available_rect_before_wrap();
             let buttons_width = HEADER_BUTTONS * ADD_BUTTON_SIZE
                 + (HEADER_BUTTONS - 1.0) * ICON_BUTTON_GAP
@@ -49,7 +49,7 @@ impl PlayerApp {
                     if count == 0 {
                         components::block_title(ui, t().queue, Align::LEFT, TEXT)
                     } else {
-                        // Связанный плейлист — рядом с заголовком, перед числом треков
+                        // The linked playlist — next to the title, before the track count
                         let tracks = t().count(count, &t().track_count);
                         let note = match self.queue_playlist_name() {
                             Some(name) => format!("· {name} · {tracks}"),
@@ -59,10 +59,10 @@ impl PlayerApp {
                     }
                 })
                 .inner;
-            // Строка кнопок — та же по высоте, но во всю ширину
+            // The button row — the same height, but full width
             let row = Rect::from_x_y_ranges(full.x_range(), title_row.y_range());
-            // Слева направо: «+», сохранить, очистить. «+» ставится у правого края переданной
-            // строки — даём ему строку, укороченную на две кнопки справа
+            // Left to right: "+", save, clear. "+" is placed at the right edge of the given
+            // row — we give it a row shortened by the two buttons on the right
             let add_row = row.with_max_x(row.right() - 2.0 * (ADD_BUTTON_SIZE + ICON_BUTTON_GAP));
             self.render_add_button(ui, add_row, Destination::Queue);
             self.render_queue_buttons(ui, row, count > 0);
@@ -81,9 +81,9 @@ impl PlayerApp {
             return;
         }
 
-        // Один выделенный трек из медиатеки — можно показать его там и перейти к его альбому.
-        // Меню открывается после выделения, так что выделение начала кадра — то, к которому
-        // оно относится
+        // A single selected track from the library — it can be shown there and its album opened.
+        // The menu opens after selection, so the selection at the start of the frame is the one
+        // it refers to
         let single = match self.queue_view.selection().iter().collect::<Vec<_>>()[..] {
             [&index] => self
                 .core
@@ -100,10 +100,10 @@ impl PlayerApp {
             .filter(|track| self.core.library.paths().contains(&track.path))
             .map(|track| track.path);
 
-        // Сколько выделенных треков не из медиатеки (добавлены кнопкой «+» мимо неё) — для
-        // пункта «Add to library». Удалить из медиатеки отсюда нельзя: очередь — про то, что
-        // слушаем, а не про медиатеку. Меню открывается после выделения, так что выделение
-        // начала кадра — то, к которому оно относится
+        // How many selected tracks are not from the library (added with the "+" button bypassing it) — for
+        // the "Add to library" item. Removing from the library isn't possible here: the queue is about what
+        // we're listening to, not about the library. The menu opens after selection, so the selection
+        // at the start of the frame is the one it refers to
         let list = &self.core.controller.player().track_list;
         let library_paths = self.core.library.paths();
         let outside_library = self
@@ -113,7 +113,7 @@ impl PlayerApp {
             .filter_map(|&index| list.tracks.get(index))
             .filter(|track| !library_paths.contains(&track.path))
             .count();
-        // Меню знает только, сколько строк выделено: какие — узнаём после списка
+        // The menu only knows how many rows are selected: which ones — we find out after the list
         let mut remove = false;
         let mut add_to_library = false;
         let mut show_in_library = false;
@@ -172,13 +172,13 @@ impl PlayerApp {
         }
     }
 
-    /// Кнопки справа от «+» в заголовке очереди: сохранить её как плейлист (дискета)
-    /// и очистить (метла).
-    /// Пустую очередь ни сохранить, ни очистить нельзя — кнопки приглушены
+    /// Buttons to the right of "+" in the queue header: save it as a playlist (floppy disk)
+    /// and clear it (broom).
+    /// An empty queue can't be saved or cleared — the buttons are dimmed
     fn render_queue_buttons(&mut self, ui: &mut Ui, row: Rect, enabled: bool) {
         let size = vec2(ADD_BUTTON_SIZE, ADD_BUTTON_SIZE);
-        // Места справа налево: 0 — у правого края (очистить), 1 — левее (сохранить),
-        // 2 — «+»
+        // Slots from right to left: 0 — at the right edge (clear), 1 — to the left (save),
+        // 2 — "+"
         let rect_at = |slot: f32| {
             Rect::from_center_size(
                 pos2(
@@ -192,7 +192,7 @@ impl PlayerApp {
         };
 
         let save_rect = rect_at(1.0);
-        // Очередь связана с плейлистом и не менялась — сохранять нечего
+        // The queue is linked to a playlist and hasn't changed — nothing to save
         let save_enabled = enabled && !self.core.queue_matches_playlist();
         let save = components::icon_button(
             ui,
@@ -202,8 +202,8 @@ impl PlayerApp {
             save_enabled,
         );
         paint_save_playlist(ui, save_rect, save_enabled, save.hover);
-        // Очередь связана с плейлистом — клик перезаписывает его; сохранить как новый —
-        // из меню по правому клику. Не связана — клик спрашивает название нового
+        // The queue is linked to a playlist — a click overwrites it; save as new —
+        // from the right-click menu. Not linked — a click asks for a new name
         let linked = self.core.queue_playlist().zip(self.queue_playlist_name());
         let save_clicked = save.clicked;
         let mut save_as_new = false;
@@ -251,7 +251,7 @@ impl PlayerApp {
         }
     }
 
-    /// Название плейлиста, с которым связана очередь (см. `Core::queue_playlist`)
+    /// Title of the playlist the queue is linked to (see `Core::queue_playlist`)
     fn queue_playlist_name(&self) -> Option<String> {
         let id = self.core.queue_playlist()?;
         self.core
@@ -260,7 +260,7 @@ impl PlayerApp {
             .map(|playlist| playlist.name.clone())
     }
 
-    /// Нижний блок очереди: слева shuffle, справа две кнопки повтора
+    /// The queue's bottom block: shuffle on the left, two repeat buttons on the right
     pub(crate) fn render_playback_modes(&mut self, ui: &mut Ui) {
         let list = &self.core.controller.player().track_list;
         let (shuffle, repeat) = (list.shuffle, list.repeat);
@@ -275,11 +275,11 @@ impl PlayerApp {
                 self.dispatch(Action::ToggleShuffle);
             }
 
-            // Повторы прижаты вправо. Включена может быть только одна из кнопок —
-            // это обеспечивает сам RepeatMode
+            // Repeat buttons are pushed right. Only one of them can be on —
+            // RepeatMode itself ensures that
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = ICON_BUTTON_GAP;
-                // В right_to_left первой добавляется самая правая кнопка
+                // In right_to_left the rightmost button is added first
                 for (mode, id_salt, tooltip) in [
                     (RepeatMode::All, "repeat_all", t().repeat_all),
                     (RepeatMode::One, "repeat_one", t().repeat_one),

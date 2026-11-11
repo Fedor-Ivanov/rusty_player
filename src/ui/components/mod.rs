@@ -1,4 +1,4 @@
-//! Переиспользуемые элементы интерфейса.
+//! Reusable UI elements.
 
 mod banners;
 mod buttons;

@@ -1,12 +1,12 @@
-//! Действия пользователя с данными приложения — и единственное место, где они выполняются.
+//! User actions on app data — and the only place where they are performed.
 //!
-//! Страницы и панели не меняют медиатеку, плеер и плейлист сами: они отправляют `Action`
-//! (`dispatch`), а в конце кадра `apply_actions` выполняет накопленное по порядку. Так всё,
-//! что умеет приложение, видно в одном перечислении, а каждое действие реализовано один
-//! раз — откуда бы его ни вызвали: из меню, кнопкой или с клавиатуры.
+//! Pages and panels don't change the library, the queue and saved playlists themselves: they send an `Action`
+//! (`dispatch`), and at the end of the frame `apply_actions` performs the accumulated ones in order. This way everything
+//! the app can do is visible in one enum, and each action is implemented once —
+//! wherever it's invoked from: a menu, a button or the keyboard.
 //!
-//! Состояние самого интерфейса (выделение, прокрутка, текст поиска) сюда не относится —
-//! его по-прежнему меняют компоненты.
+//! The UI's own state (selection, scroll, search text) doesn't belong here —
+//! components still change it themselves.
 
 use eframe::egui;
 use std::{
@@ -34,72 +34,72 @@ use crate::{
 };
 
 pub(crate) enum Action {
-    /// Заменить очередь треками медиатеки (их номерами в медиатеке) и играть с первого
+    /// Replace the queue with library tracks (by their library indices) and play from the first
     PlayLibraryTracks(Vec<usize>),
-    /// Сыграть трек медиатеки: если его нет в очереди, он встаёт в конец
+    /// Play a library track: if it's not in the queue, it's appended
     PlayFromLibrary(usize),
-    /// Треки медиатеки — в конец очереди
+    /// Library tracks — to the end of the queue
     AddToQueue(Vec<usize>),
-    /// Спросить, удалить ли треки медиатеки (см. `dialogs::remove`)
+    /// Ask whether to remove library tracks (see `dialogs::remove`)
     RequestSongsRemoval(Vec<usize>),
-    /// Спросить, удалить ли альбомы или исполнителей `names` — их треки медиатеки `tracks`
+    /// Ask whether to remove albums or artists `names` — their library tracks `tracks`
     RequestGroupRemoval {
         kind: GroupKind,
         names: Vec<String>,
         tracks: Vec<usize>,
     },
-    /// Удалить из медиатеки треки этих файлов — подтверждено в диалоге. Сами файлы
-    /// остаются на диске
+    /// Remove the tracks of these files from the library — confirmed in the dialog. The files themselves
+    /// stay on disk
     RemoveFromLibrary(HashSet<PathBuf>),
-    /// Сыграть трек очереди с номером
+    /// Play the queue track with the index
     PlayQueueTrack(usize),
-    /// Показать трек медиатеки (файл) в Songs: открыть список, выделить трек и прокрутить
-    /// к нему
+    /// Show a library track (file) in Songs: open the list, select the track and scroll
+    /// to it
     ShowInLibrary(PathBuf),
-    /// Убрать из очереди треки с номерами
+    /// Remove tracks with the indices from the queue
     RemoveFromQueue(BTreeSet<usize>),
-    /// Очистить очередь: воспроизведение останавливается
+    /// Clear the queue: playback stops
     ClearQueue,
-    /// Треки очереди с номерами — в медиатеку (те, что не из неё)
+    /// Queue tracks with the indices — into the library (those not from it)
     AddQueueTracksToLibrary(Vec<usize>),
     ToggleShuffle,
     ToggleRepeat(RepeatMode),
 
-    // ---- сохранённые плейлисты
-    /// Открыть окно названия, чтобы сохранить очередь как плейлист
+    // ---- saved playlists
+    /// Open the name dialog to save the queue as a playlist
     RequestSaveQueue,
     SaveQueueAsPlaylist(String),
-    /// Перезаписать связанный с очередью плейлист её треками
+    /// Overwrite the playlist linked to the queue with its tracks
     SaveQueueToPlaylist(PlaylistId),
-    /// Открыть окно названия для нового плейлиста из треков медиатеки
+    /// Open the name dialog for a new playlist from library tracks
     RequestNewPlaylist(Vec<usize>),
     CreatePlaylist {
         name: String,
         tracks: Vec<usize>,
     },
-    /// Треки медиатеки — в конец плейлиста
+    /// Library tracks — to the end of the playlist
     AddToPlaylist {
         id: PlaylistId,
         tracks: Vec<usize>,
     },
-    /// Заменить очередь треками плейлиста и играть
+    /// Replace the queue with the playlist's tracks and play
     PlayPlaylist(PlaylistId),
-    /// Сыграть трек плейлиста: если его нет в очереди, он встаёт в конец
+    /// Play a playlist track: if it's not in the queue, it's appended
     PlayFromPlaylist {
         id: PlaylistId,
         index: usize,
     },
-    /// Треки плейлиста с номерами — в конец очереди
+    /// Playlist tracks with the indices — to the end of the queue
     AddPlaylistTracksToQueue {
         id: PlaylistId,
         indices: Vec<usize>,
     },
-    /// Треки плейлиста с номерами — в медиатеку (те, что не из неё)
+    /// Playlist tracks with the indices — into the library (those not from it)
     AddPlaylistTracksToLibrary {
         id: PlaylistId,
         indices: Vec<usize>,
     },
-    /// Убрать из плейлиста треки с номерами
+    /// Remove tracks with the indices from the playlist
     RemoveFromPlaylist {
         id: PlaylistId,
         indices: BTreeSet<usize>,
@@ -109,69 +109,69 @@ pub(crate) enum Action {
         id: PlaylistId,
         name: String,
     },
-    /// Спросить, удалить ли плейлисты (см. `dialogs::playlist`)
+    /// Ask whether to delete playlists (see `dialogs::playlist`)
     RequestPlaylistDeletion(Vec<PlaylistId>),
     DeletePlaylists(Vec<PlaylistId>),
 
-    // ---- плеер
-    /// Играет — пауза, иначе — играть
+    // ---- player
+    /// Playing — pause, otherwise — play
     TogglePlay,
-    /// Играть, если не играет (системная кнопка «play», не переключатель)
+    /// Play if not playing (the system "play" button, not a toggle)
     Play,
     Pause,
     Previous,
     Next,
-    /// Перемотать текущий трек на позицию в секундах
+    /// Seek the current track to a position in seconds
     Seek(f32),
-    /// Громкость 0.0..=1.0 — положение ползунка. Включает звук, если он был выключен
+    /// Volume 0.0..=1.0 — the slider position. Unmutes if muted
     SetVolume(f32),
     ToggleMute,
-    /// Трек доиграл — событие аудиопотока, а не пользователя: следующий трек по порядку
+    /// Track finished — an audio thread event, not a user one: the next track in order
     TrackEnded,
 
-    // ---- добавление файлов
-    /// Выбрать файлы в системном окне и добавить — в медиатеку или в плейлист
+    // ---- adding files
+    /// Pick files in the system dialog and add them — to the library or to the queue
     AddFiles(Destination),
-    /// Выбрать папку и добавить все аудиофайлы в ней
+    /// Pick a folder and add all audio files in it
     AddFolder(Destination),
-    /// Добавить перетащенные файлы и папки (папки — со всеми аудиофайлами внутри)
+    /// Add dropped files and folders (folders — with all audio files inside)
     AddPaths {
         paths: Vec<PathBuf>,
         destination: Destination,
     },
-    /// Фоновое добавление закончилось: положить прочитанное по назначению
+    /// Background adding finished: put what was read where it belongs
     TracksLoaded {
         finished: Finished,
         destination: Destination,
     },
-    /// Остановить текущее добавление: уже прочитанное не добавляется
+    /// Stop the current adding: what was already read is not added
     CancelLoading,
 
-    // ---- настройки
-    /// Язык интерфейса — со следующего кадра весь интерфейс на нём
+    // ---- settings
+    /// UI language — from the next frame the whole UI uses it
     SetLanguage(Language),
-    /// Оттенок и прозрачность стекла окна
+    /// Window glass tint and transparency
     SetGlass(Glass),
-    /// Включить или выключить поиск в интернете: фото исполнителей, тексты песен
+    /// Enable or disable online search: artist photos, lyrics
     SetOnlineLookups(bool),
 
-    /// Показать или спрятать текст песни на странице текущего трека
+    /// Show or hide lyrics on the current track page
     ToggleLyrics,
 
-    // ---- навигация
-    /// Открыть страницу (см. `navigation`)
+    // ---- navigation
+    /// Open a page (see `navigation`)
     Navigate(Route),
 }
 
 impl PlayerApp {
-    /// Отправляет действие: выполнится в конце кадра
+    /// Sends an action: it runs at the end of the frame
     pub(crate) fn dispatch(&mut self, action: Action) {
         self.actions.push(action);
     }
 
-    /// Выполняет действия, накопленные за кадр. Вызывается в конце `ui` и в конце `logic`:
-    /// при скрытом окне `ui` не вызывается, а события (трек доиграл, файлы добавились)
-    /// случаются и тогда
+    /// Performs the actions accumulated during the frame. Called at the end of `ui` and at the end of `logic`:
+    /// with a hidden window `ui` isn't called, but events (track finished, files added)
+    /// happen then too
     pub(crate) fn apply_actions(&mut self, ctx: &egui::Context) {
         if self.actions.is_empty() {
             return;
@@ -179,13 +179,13 @@ impl PlayerApp {
         for action in std::mem::take(&mut self.actions) {
             self.apply(action);
         }
-        // Кадр уже нарисован до действий — следующий покажет их результат сразу,
-        // не дожидаясь движения мыши
+        // The frame was already drawn before the actions — the next one shows their result right away,
+        // without waiting for the mouse to move
         ctx.request_repaint();
     }
 
-    /// Играть текущий трек. Трека нет — ничего не делает: пробел или системная кнопка
-    /// при пустой очереди не повод для ошибки
+    /// Play the current track. No track — does nothing: space or the system button
+    /// with an empty queue is no reason for an error
     fn play(&mut self) -> Result<(), String> {
         if self.core.controller.player().current_track.is_none() {
             return Ok(());
@@ -196,7 +196,7 @@ impl PlayerApp {
     fn apply(&mut self, action: Action) {
         match action {
             Action::PlayLibraryTracks(indices) => {
-                // Номера треков плейлиста меняются целиком — старое выделение ни на что не указывает
+                // The playlist's track indices change entirely — the old selection points to nothing
                 self.queue_view.clear_selection();
                 let result = self.core.play_library_tracks(&indices);
                 self.report_error(result);
@@ -217,7 +217,7 @@ impl PlayerApp {
             } => self.request_group_removal(kind, names, &tracks),
             Action::RemoveFromLibrary(paths) => {
                 self.core.library.remove_paths(&paths);
-                // Номера треков медиатеки сдвинулись — выделение в списках ни на что не указывает
+                // Library track indices shifted — the selection in lists points to nothing
                 self.library_view.clear_selection();
                 self.album_tracks_view.clear_selection();
             }
@@ -232,7 +232,7 @@ impl PlayerApp {
             Action::RemoveFromQueue(indices) => {
                 let result = self.core.controller.remove_tracks(&indices);
                 self.report_error(result);
-                // Номера оставшихся треков сдвинулись
+                // Indices of the remaining tracks shifted
                 self.queue_view.clear_selection();
             }
             Action::ClearQueue => {
@@ -292,7 +292,7 @@ impl PlayerApp {
             Action::RemoveFromPlaylist { id, indices } => {
                 let result = self.core.playlists.remove_tracks(id, &indices);
                 self.report_error(result);
-                // Номера оставшихся треков сдвинулись
+                // Indices of the remaining tracks shifted
                 self.playlist_tracks_view.clear_selection();
             }
             Action::RequestRenamePlaylist(id) => {
@@ -312,7 +312,7 @@ impl PlayerApp {
             Action::DeletePlaylists(ids) => {
                 let result = self.core.playlists.delete(&ids);
                 self.report_error(result);
-                // Была открыта страница удалённого — к списку плейлистов
+                // The deleted playlist's page was open — go to the playlist list
                 if let Route::Playlist(id) = self.route
                     && ids.contains(&id)
                 {
@@ -375,7 +375,7 @@ impl PlayerApp {
             Action::SetGlass(glass) => self.core.settings.update_glass(glass),
             Action::SetOnlineLookups(online) => {
                 self.core.set_online_lookups(online);
-                // Текст песни мог не найтись из-за выключенного поиска — найдём заново
+                // Lyrics may not have been found because search was off — look again
                 self.current_lyrics = None;
             }
 
@@ -389,8 +389,8 @@ impl PlayerApp {
 }
 
 impl PlayerApp {
-    /// Открывает Songs и выделяет в нём трек файла `path`, как будто по нему кликнули.
-    /// Поиск сбрасывается: иначе трек мог бы оказаться скрыт
+    /// Opens Songs and selects the track of file `path` in it, as if it were clicked.
+    /// The search is reset: otherwise the track could be hidden
     fn show_in_library(&mut self, path: &std::path::Path) {
         let Some(index) = self
             .core

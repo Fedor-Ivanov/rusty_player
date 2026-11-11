@@ -1,23 +1,22 @@
-//! Оформление выпадающих и контекстных меню.
+//! Styling of dropdown and context menus.
 
 use eframe::egui::{self, Response, RichText, Ui, vec2};
 
 const MENU_TEXT_SIZE: f32 = 15.0;
 
-/// Оформление пунктов меню: крупнее стандартных — больше шрифт и поля вокруг текста.
-/// Вызывать в начале содержимого меню, до `menu_item`
+/// Menu item styling: larger than the default — bigger font and padding around the text.
+/// Call at the start of the menu content, before `menu_item`
 pub fn menu_style(ui: &mut Ui) {
     ui.spacing_mut().button_padding = vec2(12.0, 7.0);
     ui.spacing_mut().item_spacing.y = 2.0;
 }
 
-/// Пункт меню
 pub fn menu_item(ui: &mut Ui, text: &str) -> Response {
     ui.add(egui::Button::new(RichText::new(text).size(MENU_TEXT_SIZE)))
 }
 
-/// Подменю: пункт со стрелкой, при наведении рядом открывается вложенное меню
-/// в том же оформлении
+/// Submenu: an item with an arrow; on hover a nested menu opens next to it
+/// with the same styling
 pub fn submenu(ui: &mut Ui, text: &str, add_contents: impl FnOnce(&mut Ui)) {
     ui.menu_button(RichText::new(text).size(MENU_TEXT_SIZE), |ui| {
         menu_style(ui);

@@ -1,8 +1,8 @@
-//! Тексты интерфейса на французском.
+//! UI texts in French.
 
 use super::{Plural, PluralForm, Texts};
 
-/// В отличие от английского, единственное число и у нуля: «0 piste», «1 piste», «2 pistes»
+/// Unlike English, zero is singular too: "0 piste", "1 piste", "2 pistes"
 fn plural_form(count: usize) -> PluralForm {
     if count <= 1 {
         PluralForm::One

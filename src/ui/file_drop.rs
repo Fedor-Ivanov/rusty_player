@@ -1,11 +1,11 @@
-//! Добавление перетаскиванием: файлы и папки из Finder или Проводника бросают на окно.
-//! Пока их несут над окном, видны две зоны — «в медиатеку» (всё левее очереди) и «в очередь»
-//! (панель очереди); зона под курсором подсвечена. Брошенное добавляется туда же, куда
-//! добавляет кнопка «+».
+//! Adding by drag and drop: files and folders from Finder or Explorer are dropped onto the window.
+//! While they're carried over the window, two zones are visible — "to library" (everything left of the queue) and "to queue"
+//! (the queue panel); the zone under the cursor is highlighted. What's dropped is added to the same place
+//! the "+" button adds to.
 //!
-//! Пока над окном несут файлы, система не сообщает приложению, где курсор: события движения
-//! мыши не приходят ни на macOS, ни на Windows (winit сообщает только сами файлы). Поэтому
-//! курсор спрашивается у системы напрямую (`Cursor`) — каждый кадр, пока файлы над окном.
+//! While files are carried over the window, the system doesn't tell the app where the cursor is: mouse
+//! move events don't arrive on either macOS or Windows (winit reports only the files themselves). So
+//! the cursor is queried from the system directly (`Cursor`) — every frame while files are over the window.
 
 use eframe::egui::{self, Align2, Color32, CornerRadius, FontId, Rect, Stroke, StrokeKind};
 
@@ -17,16 +17,16 @@ use super::{
     style::theme::{HIGHLIGHT, HIGHLIGHT_STRONG, HOVER_FADE_SECS, TEXT, TEXT_MUTED},
 };
 
-/// Отступ зон от краёв окна и друг от друга
+/// Zone inset from the window edges and from each other
 const ZONE_INSET: f32 = 12.0;
 const ZONE_RADIUS: u8 = 16;
 const ZONE_TEXT_SIZE: f32 = 20.0;
-/// Затемнение окна под зонами — чтобы надписи читались поверх любого содержимого
+/// Dimming the window under the zones — so the labels are readable over any content
 const DIM: Color32 = Color32::from_black_alpha(140);
 
 impl PlayerApp {
-    /// Зоны над окном, пока над ним несут файлы, и добавление брошенных. `queue` — где панель
-    /// очереди: там зона «в очередь», левее — «в медиатеку». Вызывать в конце кадра, поверх всего
+    /// Zones over the window while files are carried over it, and adding the dropped ones. `queue` — where the queue
+    /// panel is: the "to queue" zone is there, left of it — "to library". Call at the end of the frame, on top of everything
     pub(crate) fn render_file_drop(&mut self, ctx: &egui::Context, queue: Rect) {
         let (hovering, dropped) = ctx.input(|input| {
             (
@@ -55,8 +55,8 @@ impl PlayerApp {
         });
 
         if !dropped.is_empty() {
-            // Курсор узнать не удалось — в медиатеку: оттуда треки можно и сыграть, и добавить
-            // в очередь
+            // Couldn't get the cursor — to the library: from there tracks can be both played and added
+            // to the queue
             let destination = target.unwrap_or(Destination::Library);
             self.dispatch(Action::AddPaths {
                 paths: dropped,
@@ -73,7 +73,7 @@ impl PlayerApp {
         if visibility == 0.0 {
             return;
         }
-        // Где курсор, узнаём опросом — нужны кадры и без событий
+        // The cursor position is found by polling — frames are needed even without events
         if hovering {
             ctx.request_repaint();
         }
@@ -116,8 +116,8 @@ impl PlayerApp {
     }
 }
 
-/// Курсор в координатах окна — спрашивается у системы. `None` — система не дала окна
-/// (или платформа без поддержки): тогда зона под курсором неизвестна
+/// Cursor in window coordinates — queried from the system. `None` — the system didn't provide the window
+/// (or an unsupported platform): then the zone under the cursor is unknown
 pub(crate) struct Cursor(Option<platform::Cursor>);
 
 impl Cursor {
@@ -125,7 +125,7 @@ impl Cursor {
         Self(platform::Cursor::new(cc))
     }
 
-    /// Где курсор — в точках egui
+    /// Cursor position — in egui points
     fn position(&self, ctx: &egui::Context) -> Option<egui::Pos2> {
         self.0.as_ref()?.position(ctx)
     }
@@ -148,12 +148,12 @@ mod platform {
             let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
                 return None;
             };
-            // SAFETY: вью принадлежит окну приложения; удерживаем его своей ссылкой
+            // SAFETY: the view belongs to the app window; we hold it with our own reference
             let view = unsafe { Retained::retain(handle.ns_view.as_ptr().cast::<NSView>()) }?;
             Some(Self { view })
         }
 
-        /// Курсор в точках вью (начало — левый верхний угол), переведённых в точки egui
+        /// Cursor in view points (origin — top left corner), converted to egui points
         pub fn position(&self, ctx: &egui::Context) -> Option<Pos2> {
             let window = self.view.window()?;
             let in_window = window.mouseLocationOutsideOfEventStream();
@@ -193,10 +193,10 @@ mod platform {
             }
         }
 
-        /// Курсор в пикселях клиентской области окна, переведённых в точки egui
+        /// Cursor in window client area pixels, converted to egui points
         pub fn position(&self, ctx: &egui::Context) -> Option<Pos2> {
             let mut point = POINT { x: 0, y: 0 };
-            // SAFETY: окно живо всё время работы приложения, `point` — наша переменная
+            // SAFETY: the window is alive for the whole app lifetime, `point` is our variable
             let ok = unsafe {
                 GetCursorPos(&mut point) != 0 && ScreenToClient(self.hwnd, &mut point) != 0
             };

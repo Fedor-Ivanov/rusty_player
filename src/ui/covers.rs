@@ -1,12 +1,12 @@
-//! Обложки альбомов и фото исполнителей — единственный источник картинок для всего
-//! интерфейса: сеток и текущего трека. Обложки не хранятся в треках (тысячи обложек заняли
-//! бы слишком много памяти), поэтому для показанных на экране они читаются из тегов
-//! в фоновых потоках, уменьшаются до нужного размера и превращаются в текстуры. Хранятся
-//! только недавно показанные: при прокрутке большой библиотеки память не растёт. Фото из
-//! интернета (Deezer) загружаются по ссылке прямо в память и на диск не пишутся.
+//! Album covers and artist photos — the only image source for the whole
+//! UI: grids and the current track. Covers aren't stored in tracks (thousands of covers would take
+//! too much memory), so for those shown on screen they are read from tags
+//! on background threads, downscaled to the needed size and turned into textures. Only
+//! recently shown ones are kept: memory doesn't grow while scrolling a large library. Photos from
+//! the internet (Deezer) are loaded from a link straight into memory and never written to disk.
 //!
-//! При быстрой прокрутке заказов больше, чем потоки успевают: первыми готовятся те, что
-//! на экране сейчас, затем соседние ряды (`prefetch`), а уехавшие с экрана выбрасываются.
+//! During fast scrolling there are more requests than threads can handle: those on screen
+//! right now are prepared first, then neighboring rows (`prefetch`), and those scrolled off screen are dropped.
 
 use eframe::egui::{self, ColorImage, TextureHandle, TextureOptions};
 use std::{
@@ -23,28 +23,28 @@ use std::{
 
 use crate::core::library::metadata::{read_cover, read_folder_cover};
 
-/// Сколько обложек держать: миниатюра ~400 КБ, итого до ~120 МБ видеопамяти
+/// How many covers to keep: a thumbnail is ~400 KB, up to ~120 MB of video memory in total
 const MAX_COVERS: usize = 300;
-/// Заказ, которого не хотели столько кадров, выбрасывается: картинка уехала с экрана.
-/// Пока заказы ждут, кадры идут каждые 50 мс — это ~0,5 с
+/// A request not wanted for this many frames is dropped: the image scrolled off screen.
+/// While requests are waiting, frames come every 50 ms — that's ~0.5 s
 const STALE_FRAMES: u64 = 10;
-/// Готовая картинка проявляется за столько секунд, а не возникает резко
+/// A ready image fades in over this many seconds rather than appearing abruptly
 const APPEAR_SECS: f32 = 0.15;
 
-/// Размер обложки: от него зависит, до скольких пикселей её уменьшать
+/// Cover size: determines how many pixels to downscale it to
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoverSize {
-    /// Плитка сетки
+    /// Grid tile
     Thumbnail,
-    /// Обложка текущего трека
+    /// Current track cover
     Large,
-    /// Размытая обложка — фон деталей текущего трека. Маленькая: при растягивании на всю
-    /// область линейная фильтрация сама сглаживает её
+    /// Blurred cover — the backdrop of the current track details. Small: when stretched over the whole
+    /// area, linear filtering smooths it by itself
     Backdrop,
 }
 
 impl CoverSize {
-    /// Сторона в пикселях — с запасом на экраны с двойной плотностью
+    /// Side in pixels — with headroom for double-density screens
     fn pixels(self) -> u32 {
         match self {
             Self::Thumbnail => 320,
@@ -54,28 +54,28 @@ impl CoverSize {
     }
 }
 
-/// Сила размытия фона: сигма Гаусса в пикселях обложки `CoverSize::Backdrop`
+/// Backdrop blur strength: Gaussian sigma in pixels of a `CoverSize::Backdrop` cover
 const BACKDROP_BLUR_SIGMA: f32 = 8.0;
 
-/// Откуда картинка: файлы (в кэше — по первому из кандидатов) или ссылка
+/// Where the image comes from: files (cached by the first candidate) or a link
 #[derive(Clone, PartialEq, Eq, Hash)]
 enum Origin {
     File(PathBuf),
     Url(String),
 }
 
-/// Картинка в кэше — по происхождению и размеру
+/// A cached image — by origin and size
 type Key = (Origin, CoverSize);
-/// Потоков для обложек из файлов. Загрузки по ссылкам идут в своём потоке: медленная сеть
-/// не задерживает обложки альбомов
+/// Threads for covers from files. Link downloads run on their own thread: a slow network
+/// doesn't hold up album covers
 const WORKERS: usize = 2;
 
 pub enum Cover<'a> {
-    /// Ещё читается
+    /// Still loading
     Loading,
-    /// В тегах обложки нет
+    /// No cover in tags
     Missing,
-    /// Готова. Второе — насколько проявилась: 0.0..=1.0, см. `APPEAR_SECS`
+    /// Ready. The second value is how far it has faded in: 0.0..=1.0, see `APPEAR_SECS`
     Ready(&'a TextureHandle, f32),
 }
 
@@ -86,30 +86,30 @@ enum Entry {
     },
     Ready {
         texture: TextureHandle,
-        /// Хеш исходной картинки: по нему одинаковые обложки разных треков делят одну текстуру
+        /// Hash of the source image: identical covers of different tracks share one texture by it
         content: u64,
         last_used: u64,
-        /// Когда стала готова — для проявления
+        /// When it became ready — for the fade-in
         ready_at: Instant,
     },
 }
 
-/// Прочитанная обложка: картинка и хеш исходных байтов
+/// A read cover: the image and the hash of the source bytes
 type Loaded = Option<(ColorImage, u64)>;
 
-/// Заказ фоновому потоку
+/// A request to the background thread
 struct Job {
     key: Key,
-    /// Файлы, в тегах которых искать обложку, по порядку (у ссылки — пусто)
+    /// Files whose tags to search for the cover, in order (empty for a link)
     candidates: Vec<PathBuf>,
-    /// Кадр, в котором картинку хотели последний раз
+    /// The frame in which the image was last wanted
     wanted: u64,
-    /// В том кадре она была на экране, а не в соседнем ряду
+    /// In that frame it was on screen rather than in a neighboring row
     visible: bool,
 }
 
-/// Очередь заказов, общая для потоков. Поток берёт самый нужный: хотели позже всех,
-/// а при равенстве — видимый раньше соседнего
+/// Request queue shared by threads. A thread takes the most needed one: wanted most recently,
+/// and on a tie — visible before neighboring
 #[derive(Default)]
 struct Jobs {
     items: Vec<Job>,
@@ -119,13 +119,13 @@ struct Jobs {
 type Queue = Arc<(Mutex<Jobs>, Condvar)>;
 
 pub struct CoverCache {
-    /// Заказы обложек из файлов
+    /// Requests for covers from files
     files: Queue,
-    /// Заказы загрузок по ссылкам
+    /// Requests for link downloads
     downloads: Queue,
     results: Receiver<(Key, Loaded)>,
     entries: HashMap<Key, Entry>,
-    /// Номер кадра — для вытеснения давно не показанных миниатюр и брошенных заказов
+    /// Frame number — for evicting long-unshown thumbnails and abandoned requests
     frame: u64,
 }
 
@@ -148,9 +148,9 @@ impl CoverCache {
         }
     }
 
-    /// Обложка размера `size` из тегов первого из `candidates`, где она есть: обложка
-    /// альбома бывает только у части его треков. Если её ещё нет — заказывает чтение в фоне.
-    /// В кэше обложка хранится по первому кандидату
+    /// Cover of size `size` from the tags of the first of `candidates` that has one: an album
+    /// cover is present only in some of its tracks. If it's not there yet — requests a background read.
+    /// The cover is cached under the first candidate
     pub fn get(&mut self, candidates: &[PathBuf], size: CoverSize) -> Cover<'_> {
         let Some(first) = candidates.first() else {
             return Cover::Missing;
@@ -160,23 +160,23 @@ impl CoverCache {
         self.cover(&key)
     }
 
-    /// Картинка размера `size` по ссылке: загружается в фоне только в память — на диск
-    /// не пишется. Не загрузилась (нет сети) — заглушка, пока картинку не вытеснят из кэша
+    /// Image of size `size` from a link: loaded in the background into memory only — never written
+    /// to disk. Failed to load (no network) — a placeholder until the image is evicted from the cache
     pub fn get_url(&mut self, url: &str, size: CoverSize) -> Cover<'_> {
         let key = (Origin::Url(url.to_owned()), size);
         self.request(&key, &[], true);
         self.cover(&key)
     }
 
-    /// Заказывает обложку заранее — для соседних с экраном рядов сетки: к прокрутке она
-    /// будет готова. Видимые готовятся раньше
+    /// Requests a cover in advance — for grid rows next to the screen: by the time of scrolling it
+    /// will be ready. Visible ones are prepared first
     pub fn prefetch(&mut self, candidates: &[PathBuf], size: CoverSize) {
         if let Some(first) = candidates.first() {
             self.request(&(Origin::File(first.clone()), size), candidates, false);
         }
     }
 
-    /// Заказ картинки `key` или, если она уже заказана, отметка, что она всё ещё нужна
+    /// Requests image `key` or, if already requested, marks that it's still needed
     fn request(&mut self, key: &Key, candidates: &[PathBuf], visible: bool) {
         let frame = self.frame;
         let queue = match key.0 {
@@ -198,8 +198,8 @@ impl CoverCache {
                 });
                 ready.notify_one();
             }
-            // Ждёт в очереди — нужен и в этом кадре. Если его уже взял поток, в очереди
-            // его нет: он и так скоро будет готов
+            // Waiting in the queue — needed in this frame too. If a thread has already taken it, it's not
+            // in the queue: it'll be ready soon anyway
             Some(Entry::Loading) => {
                 if let Some(job) = jobs.items.iter_mut().find(|job| job.key == *key) {
                     job.visible = visible || (job.wanted == frame && job.visible);
@@ -210,7 +210,7 @@ impl CoverCache {
         }
     }
 
-    /// Картинка из кэша по ключу; отмечает, что её показали в этом кадре
+    /// An image from the cache by key; marks that it was shown in this frame
     fn cover(&mut self, key: &Key) -> Cover<'_> {
         let frame = self.frame;
         match self.entries.get_mut(key) {
@@ -232,15 +232,15 @@ impl CoverCache {
         }
     }
 
-    /// Принимает готовые миниатюры, выбрасывает брошенные заказы и вытесняет лишние
-    /// миниатюры. Вызывать раз за кадр
+    /// Takes ready thumbnails, drops abandoned requests and evicts excess
+    /// thumbnails. Call once per frame
     pub fn update(&mut self, ctx: &egui::Context) {
         self.frame += 1;
         while let Ok((key, loaded)) = self.results.try_recv() {
             let entry = match loaded {
                 Some((image, content)) => Entry::Ready {
-                    // Та же картинка уже есть (у треков одного альбома обложка обычно одна) —
-                    // берём её текстуру: смена трека внутри альбома не меняет обложку вовсе
+                    // The same image already exists (tracks of one album usually share a cover) —
+                    // take its texture: switching tracks within an album doesn't change the cover at all
                     texture: self.texture_with(content, key.1).unwrap_or_else(|| {
                         let name = match &key.0 {
                             Origin::File(path) => format!("cover {}", path.display()),
@@ -260,7 +260,7 @@ impl CoverCache {
         }
         self.drop_stale_jobs();
 
-        // Ждём миниатюры или проявляем готовые — нужны кадры и без действий пользователя
+        // Waiting for thumbnails or fading in ready ones — frames are needed even without user actions
         if self.entries.values().any(|e| matches!(e, Entry::Loading)) {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
@@ -274,8 +274,8 @@ impl CoverCache {
         self.evict();
     }
 
-    /// Выбрасывает заказы, которых давно не хотели: картинка уехала с экрана. Покажется
-    /// снова — закажется снова
+    /// Drops requests not wanted for a long time: the image scrolled off screen. When shown
+    /// again — it will be requested again
     fn drop_stale_jobs(&mut self) {
         let frame = self.frame;
         for queue in [&self.files, &self.downloads] {
@@ -292,7 +292,7 @@ impl CoverCache {
         }
     }
 
-    /// Уже загруженная текстура обложки с хешем `content` и размером `size`
+    /// An already loaded cover texture with hash `content` and size `size`
     fn texture_with(&self, content: u64, size: CoverSize) -> Option<TextureHandle> {
         self.entries
             .iter()
@@ -306,7 +306,7 @@ impl CoverCache {
             })
     }
 
-    /// Оставляет MAX_COVERS недавно показанных; заказанные, но не готовые не трогает
+    /// Keeps MAX_COVERS recently shown; doesn't touch requested but not ready ones
     fn evict(&mut self) {
         let loaded = self
             .entries
@@ -333,7 +333,7 @@ impl CoverCache {
     }
 }
 
-/// Фоновый поток: берёт самый нужный заказ и готовит картинку
+/// Background thread: takes the most needed request and prepares the image
 fn work(queue: &Queue, results: &Sender<(Key, Loaded)>) {
     let (jobs, ready) = &**queue;
     loop {
@@ -372,7 +372,7 @@ fn work(queue: &Queue, results: &Sender<(Key, Loaded)>) {
 
 impl Drop for CoverCache {
     fn drop(&mut self) {
-        // Потоки доделают текущую картинку и закончатся
+        // The threads finish the current image and exit
         for queue in [&self.files, &self.downloads] {
             if let Ok(mut jobs) = queue.0.lock() {
                 jobs.closed = true;
@@ -382,23 +382,23 @@ impl Drop for CoverCache {
     }
 }
 
-/// Обложка для файлов `candidates`: из тегов первого, где она есть (обычно это первый же),
-/// а если ни в одном её нет — картинкой из их папки (см. `read_folder_cover`).
-/// Вместе с картинкой — хеш исходных байтов
+/// Cover for files `candidates`: from the tags of the first that has one (usually the very first),
+/// and if none has it — an image from their folder (see `read_folder_cover`).
+/// Together with the image — the hash of the source bytes
 fn find_cover(candidates: &[PathBuf], size: CoverSize) -> Loaded {
     cover_sources(candidates).find_map(|bytes| decode_cover(&bytes, size))
 }
 
-/// Байты обложки для файлов `candidates` как есть, без декодирования — в том же порядке
-/// поиска, что и `find_cover`
+/// Cover bytes for files `candidates` as is, without decoding — in the same search
+/// order as `find_cover`
 pub fn cover_bytes(candidates: &[PathBuf]) -> Option<Vec<u8>> {
     cover_sources(candidates).next()
 }
 
-/// Найденные картинки по порядку: из тегов файлов, затем из их папок. Читаются лениво —
-/// до первой подходящей
+/// Found images in order: from the files' tags, then from their folders. Read lazily —
+/// up to the first suitable one
 fn cover_sources(candidates: &[PathBuf]) -> impl Iterator<Item = Vec<u8>> + '_ {
-    // Кандидат-картинка (фото исполнителя) читается как есть, остальные — аудиофайлы
+    // An image candidate (artist photo) is read as is, the rest are audio files
     let tags = candidates.iter().filter_map(|path| {
         if is_image_file(path) {
             std::fs::read(path).ok()
@@ -407,8 +407,8 @@ fn cover_sources(candidates: &[PathBuf]) -> impl Iterator<Item = Vec<u8>> + '_ {
         }
     });
     let folders = std::iter::once(()).flat_map(move |()| {
-        // Папки по порядку кандидатов, каждая один раз: треки альбома обычно в одной.
-        // Папки картинок не смотрим: рядом с фото исполнителя лежат фото других
+        // Folders in candidate order, each once: an album's tracks are usually in one.
+        // Image folders are not checked: next to an artist photo lie photos of others
         let mut dirs: Vec<&Path> = Vec::new();
         for dir in candidates
             .iter()
@@ -424,7 +424,7 @@ fn cover_sources(candidates: &[PathBuf]) -> impl Iterator<Item = Vec<u8>> + '_ {
     tags.chain(folders)
 }
 
-/// Картинка по ссылке — байтами в память
+/// An image from a link — as bytes into memory
 fn download(url: &str) -> Option<Vec<u8>> {
     let mut response = crate::core::net::agent().get(url).call().ok()?;
     if response.status() != 200 {
@@ -433,7 +433,7 @@ fn download(url: &str) -> Option<Vec<u8>> {
     response.body_mut().read_to_vec().ok()
 }
 
-/// Файл картинки, а не аудиофайл — по расширению
+/// An image file rather than an audio file — by extension
 fn is_image_file(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())
@@ -444,8 +444,8 @@ fn is_image_file(path: &Path) -> bool {
         })
 }
 
-/// Картинка обложки, уменьшенная так, чтобы большая сторона была не больше
-/// `size.pixels()`; для фона — ещё и размытая
+/// Cover image downscaled so the larger side is no more than
+/// `size.pixels()`; for the backdrop — also blurred
 fn decode_cover(bytes: &[u8], size: CoverSize) -> Loaded {
     let pixels = size.pixels();
     let mut image = image::load_from_memory(bytes)

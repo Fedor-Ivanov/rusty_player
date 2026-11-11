@@ -1,4 +1,4 @@
-//! Тексты интерфейса на английском.
+//! UI texts in English.
 
 use super::{Plural, PluralForm, Texts};
 

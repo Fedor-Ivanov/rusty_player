@@ -1,4 +1,4 @@
-//! Переключатель вкл/выкл — как в системных настройках: капсула с кружком.
+//! On/off switch — like in system settings: a capsule with a knob.
 
 use eframe::egui::{CornerRadius, CursorIcon, Sense, Ui, pos2, vec2};
 
@@ -7,11 +7,11 @@ use crate::ui::style::theme::{
 };
 
 const SIZE: eframe::egui::Vec2 = vec2(36.0, 20.0);
-/// Зазор между кружком и краем капсулы
+/// Gap between the knob and the capsule edge
 const KNOB_INSET: f32 = 2.0;
 
-/// Переключатель в положении `on`. Возвращает `true` по клику — переключить решает
-/// вызывающий. Кружок переезжает плавно
+/// A switch in state `on`. Returns `true` on click — the caller decides whether
+/// to toggle. The knob slides smoothly
 pub fn switch(ui: &mut Ui, on: bool) -> bool {
     let (rect, response) = ui.allocate_exact_size(SIZE, Sense::click());
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
@@ -22,7 +22,7 @@ pub fn switch(ui: &mut Ui, on: bool) -> bool {
         eframe::egui::emath::easing::cubic_in_out,
     );
     let painter = ui.painter();
-    // Выключен — тёмная капсула, включён — светлая, как главная кнопка
+    // Off — a dark capsule, on — a light one, like the primary button
     let track = HIGHLIGHT_STRONG.lerp_to_gamma(PRIMARY_BUTTON_FILL, progress);
     painter.rect_filled(rect, CornerRadius::same(255), track);
     let radius = rect.height() / 2.0 - KNOB_INSET;

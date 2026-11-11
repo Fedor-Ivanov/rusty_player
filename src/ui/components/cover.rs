@@ -1,5 +1,5 @@
-//! Обложка альбома: рисование для всего интерфейса — плитки сетки и обложки текущего трека
-//! с плавной сменой (`CoverFade`), фон из размытой обложки. Сами обложки берутся из кэша
+//! Album cover: drawing for the whole UI — grid tiles and the current track cover
+//! with a smooth transition (`CoverFade`), a backdrop from the blurred cover. The covers themselves come from the cache
 //! (`ui::covers`).
 
 use eframe::egui::{
@@ -15,13 +15,13 @@ use crate::ui::{
     },
 };
 
-/// Обложка в квадрате `rect`: готовая — обрезанная до квадрата по центру (как CSS
-/// `object-fit: cover`); пока читается — пустой квадрат (пластинка бы мелькала);
-/// если в тегах обложки нет — заглушка с пластинкой
+/// Cover in square `rect`: when ready — center-cropped to a square (like CSS
+/// `object-fit: cover`); while being read — an empty square (a record would flicker);
+/// if the tags have no cover — a vinyl record placeholder
 pub fn paint_cover(ui: &Ui, rect: Rect, cover: Cover<'_>, corner_radius: u8) {
     match cover {
         Cover::Ready(texture, appear) => {
-            // Только что готова — проявляется поверх подложки «читается»
+            // Just became ready — fades in over the "loading" underlay
             if appear < 1.0 {
                 ui.painter()
                     .rect_filled(rect, CornerRadius::same(corner_radius), HIGHLIGHT);
@@ -36,7 +36,7 @@ pub fn paint_cover(ui: &Ui, rect: Rect, cover: Cover<'_>, corner_radius: u8) {
     }
 }
 
-/// Картинка, обрезанная до квадрата, с непрозрачностью `opacity`
+/// An image cropped to a square, with opacity `opacity`
 fn paint_square_image(
     ui: &Ui,
     texture: &TextureHandle,
@@ -51,11 +51,11 @@ fn paint_square_image(
         .paint_at(ui, rect);
 }
 
-/// Что видно на месте обложки
+/// What's visible in place of the cover
 #[derive(Clone)]
 enum Shown {
     Image(TextureHandle),
-    /// В тегах обложки нет — заглушка (а у фона — просто стекло)
+    /// No cover in tags — a placeholder (and for the backdrop — just glass)
     Missing,
 }
 
@@ -76,26 +76,26 @@ impl Shown {
     }
 }
 
-/// Плавная смена обложки — для текущего трека, где картинка меняется вместе с треком.
-/// Пока новая обложка читается, видна прежняя: при переключении трека картинка не пропадает
-/// ни на кадр. Готова — проявляется поверх прежней за `COVER_CROSSFADE_SECS`; у треков
-/// одного альбома обложка та же, и переход не виден вовсе. Держит текстуры у себя: прежняя
-/// не пропадёт, даже если кэш обложек её уже вытеснил
+/// Smooth cover transition — for the current track, where the image changes with the track.
+/// While the new cover is being read, the old one is visible: when switching tracks the image doesn't vanish
+/// for a single frame. Once ready — fades in over the old one over `COVER_CROSSFADE_SECS`; tracks
+/// of the same album share the cover, and the transition isn't visible at all. Keeps the textures itself: the old one
+/// won't vanish even if the cover cache has already evicted it
 #[derive(Default)]
 pub struct CoverFade {
     current: Option<Shown>,
     previous: Option<Shown>,
-    /// Когда началась смена — время egui в секундах
+    /// When the transition started — egui time in seconds
     changed_at: f64,
 }
 
 impl CoverFade {
-    /// Учитывает ответ кэша обложек за этот кадр и возвращает, насколько новая обложка
-    /// уже проявилась: 0.0..=1.0. «Ещё читается» ничего не меняет
+    /// Takes into account the cover cache's answer for this frame and returns how far the new cover
+    /// has faded in: 0.0..=1.0. "Still loading" changes nothing
     pub fn update(&mut self, ui: &Ui, cover: Cover<'_>) -> f32 {
         let now = ui.input(|input| input.time);
         let next = match cover {
-            // Смену трека проявляет сама: своё проявление кэша ей не нужно
+            // It fades in track changes itself: it doesn't need the cache's own fade-in
             Cover::Ready(texture, _) => Some(Shown::Image(texture.clone())),
             Cover::Missing => Some(Shown::Missing),
             Cover::Loading => None,
@@ -116,12 +116,12 @@ impl CoverFade {
         } else {
             self.previous = None;
         }
-        // Плавно в начале и в конце
+        // Ease in and out
         t * t * (3.0 - 2.0 * t)
     }
 
-    /// Обложка в квадрате `rect`: прежняя, поверх неё проявляется новая (`progress` — из
-    /// `update`). Пока ещё ничего не прочитано — пустой квадрат, как у `paint_cover`
+    /// Cover in square `rect`: the old one, with the new one fading in over it (`progress` — from
+    /// `update`). While nothing has been read yet — an empty square, like `paint_cover`
     pub fn paint(&self, ui: &Ui, rect: Rect, progress: f32, corner_radius: u8) {
         match &self.previous {
             Some(previous) => paint_shown(ui, rect, previous, 1.0, corner_radius),
@@ -135,20 +135,20 @@ impl CoverFade {
         }
     }
 
-    /// Фон из размытой обложки (`CoverSize::Backdrop`) во весь `rect`: обрезана по центру
-    /// под пропорции `rect`, полупрозрачная — под ней видно стекло окна, — и затемнена
-    /// градиентом, чтобы светлый текст поверх читался на любой обложке. От `fade_from` до
-    /// низа `rect` плавно растворяется в стекло. При смене обложки прежний фон растворяется,
-    /// новый проявляется (`progress` — из `update`). Возвращает фигуру, а не рисует: фон
-    /// кладут под уже нарисованное. Обложки нет — `None`, видно просто стекло
+    /// A backdrop from the blurred cover (`CoverSize::Backdrop`) over all of `rect`: center-cropped
+    /// to `rect`'s proportions, translucent — the window glass shows through — and darkened
+    /// with a gradient so light text on top is readable on any cover. From `fade_from` to
+    /// the bottom of `rect` it smoothly dissolves into the glass. When the cover changes, the old backdrop dissolves,
+    /// the new one fades in (`progress` — from `update`). Returns a shape rather than drawing: the backdrop
+    /// is placed under what's already drawn. No cover — `None`, just the glass is visible
     pub fn backdrop(&self, rect: Rect, fade_from: f32, progress: f32) -> Option<Shape> {
         let rows = backdrop_rows(rect, fade_from);
         let previous = self.previous.as_ref().and_then(Shown::texture);
         let current = self.current.as_ref().and_then(Shown::texture);
-        // Фон полупрозрачный: если просто гасить прежний и проявлять новый, в середине
-        // перехода два полупрозрачных слоя пропускают больше стекла, и фон «моргает».
-        // Поэтому новый слой проявляется ровно настолько, чтобы вместе с гаснущим
-        // прежним плотность фона не менялась — меняется только цвет
+        // The backdrop is translucent: if we just fade out the old one and fade in the new one, in the middle
+        // of the transition two translucent layers let more glass through, and the backdrop "blinks".
+        // So the new layer fades in exactly enough that together with the fading
+        // old one the backdrop density doesn't change — only the color changes
         let previous_visibility = 1.0 - progress;
         let current_visibility = if previous.is_some() {
             let below = TRACK_BACKDROP_OPACITY * previous_visibility;
@@ -161,7 +161,7 @@ impl CoverFade {
             (current, current_visibility),
         ];
         let mut shapes = Vec::new();
-        // Затемнение — одно на оба слоя: видно настолько, насколько виден хоть какой-то фон
+        // One darkening for both layers: visible as much as any backdrop is visible
         let mut shade = 0.0;
         for (texture, visibility) in layers {
             if let Some(texture) = texture {
@@ -177,7 +177,7 @@ impl CoverFade {
     }
 }
 
-/// Обложка с прозрачностью `opacity`: картинка или заглушка с пластинкой
+/// Cover with opacity `opacity`: the image or a vinyl record placeholder
 fn paint_shown(ui: &Ui, rect: Rect, shown: &Shown, opacity: f32, corner_radius: u8) {
     match shown {
         Shown::Image(texture) => {
@@ -195,9 +195,9 @@ fn paint_shown(ui: &Ui, rect: Rect, shown: &Shown, opacity: f32, corner_radius: 
     }
 }
 
-/// Ряды вершин фона сверху вниз: высота и доля полной видимости. До `fade_from` фон виден
-/// целиком, дальше до низа `rect` растворяется по плавной кривой: прозрачность между
-/// рядами меняется линейно, рядов достаточно, чтобы кривая выглядела гладкой
+/// Backdrop vertex rows from top to bottom: height and share of full visibility. Up to `fade_from` the backdrop is
+/// fully visible, then down to the bottom of `rect` it dissolves along a smooth curve: opacity between
+/// rows changes linearly, there are enough rows for the curve to look smooth
 fn backdrop_rows(rect: Rect, fade_from: f32) -> Vec<(f32, f32)> {
     const FADE_STEPS: usize = 12;
     let fade_from = fade_from.clamp(rect.top(), rect.bottom());
@@ -210,7 +210,7 @@ fn backdrop_rows(rect: Rect, fade_from: f32) -> Vec<(f32, f32)> {
         .collect()
 }
 
-/// Размытая обложка фона с видимостью `visibility`
+/// Blurred backdrop cover with visibility `visibility`
 fn backdrop_image(
     rect: Rect,
     rows: &[(f32, f32)],
@@ -234,8 +234,8 @@ fn backdrop_image(
     mesh
 }
 
-/// Затемнение фона ради читаемости текста: от верха до `fade_from` — градиентом от
-/// сильного к слабому, дальше растворяется вместе с фоном
+/// Backdrop darkening for text readability: from the top to `fade_from` — a gradient from
+/// strong to weak, then it dissolves together with the backdrop
 fn backdrop_shade(rect: Rect, fade_from: f32, rows: &[(f32, f32)], visibility: f32) -> Mesh {
     let mut mesh = Mesh::default();
     for &(y, alpha) in rows {
@@ -250,7 +250,7 @@ fn backdrop_shade(rect: Rect, fade_from: f32, rows: &[(f32, f32)], visibility: f
     mesh
 }
 
-/// Вершины идут парами (левая, правая) по рядам — между соседними рядами по два треугольника
+/// Vertices come in pairs (left, right) per row — two triangles between adjacent rows
 fn connect_rows(mesh: &mut Mesh) {
     let rows = mesh.vertices.len() as u32 / 2;
     for row in 0..rows.saturating_sub(1) {
@@ -260,10 +260,10 @@ fn connect_rows(mesh: &mut Mesh) {
     }
 }
 
-/// Часть текстуры, которая заполняет `rect` без искажений: обрезка по центру под пропорции
-/// `rect` (как CSS `object-fit: cover`)
+/// The part of the texture that fills `rect` without distortion: center crop to the proportions
+/// of `rect` (like CSS `object-fit: cover`)
 fn cover_uv(texture: &TextureHandle, rect: Rect) -> Rect {
-    // Во сколько раз картинка шире области (по пропорциям)
+    // How many times the image is wider than the area (by proportions)
     let ratio = texture.aspect_ratio() / (rect.width() / rect.height().max(1.0));
     let uv_size = if ratio > 1.0 {
         vec2(1.0 / ratio, 1.0)
@@ -273,11 +273,11 @@ fn cover_uv(texture: &TextureHandle, rect: Rect) -> Rect {
     Rect::from_center_size(pos2(0.5, 0.5), uv_size)
 }
 
-/// Заглушка обложки: квадрат с виниловой пластинкой
+/// Cover placeholder: a square with a vinyl record
 fn paint_placeholder(painter: &Painter, rect: Rect, corner_radius: u8) {
     painter.rect_filled(rect, CornerRadius::same(corner_radius), HIGHLIGHT);
 
-    // Размеры — доли стороны квадрата
+    // Sizes are fractions of the square's side
     let center = rect.center();
     let r = |fraction: f32| rect.width().min(rect.height()) * fraction;
     let disc = Color32::from_rgb(0x12, 0x12, 0x14);

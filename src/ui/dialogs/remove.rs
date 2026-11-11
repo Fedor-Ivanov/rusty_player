@@ -1,4 +1,4 @@
-//! Диалог «удалить из медиатеки?»: что удаляется и подтверждение.
+//! The "remove from library?" dialog: what's being removed and the confirmation.
 
 use eframe::egui::{self};
 use std::{collections::HashSet, path::PathBuf};
@@ -13,28 +13,28 @@ use crate::{
     },
 };
 
-/// Что удаляется из библиотеки: альбом, исполнитель или отдельные треки — от этого
-/// зависят тексты диалога удаления
+/// What's removed from the library: an album, an artist or individual tracks — the removal
+/// dialog texts depend on it
 #[derive(Clone, Copy)]
 pub(crate) enum GroupKind {
     Album,
     Artist,
-    /// Треки, выделенные в списке (Songs или страница альбома)
+    /// Tracks selected in a list (Songs or an album page)
     Songs,
 }
 
-/// Альбомы, исполнители или треки, удаление которых из библиотеки ждёт подтверждения
+/// Albums, artists or tracks whose removal from the library awaits confirmation
 pub(crate) struct LibraryRemoval {
     pub(crate) kind: GroupKind,
-    /// Названия альбомов, имена исполнителей или название трека — для текста диалога
+    /// Album titles, artist names or a track title — for the dialog text
     pub(crate) names: Vec<String>,
-    /// Файлы их треков
+    /// Files of their tracks
     pub(crate) paths: HashSet<PathBuf>,
 }
 
 impl PlayerApp {
-    /// Просит подтвердить удаление треков библиотеки с номерами `indices` (сами файлы
-    /// не трогаются). Удаляются они после ответа в диалоге — см. `render_removal_dialog`
+    /// Asks to confirm removing library tracks with indices `indices` (the files themselves
+    /// are not touched). They are removed after the dialog is answered — see `render_removal_dialog`
     pub(crate) fn request_songs_removal(&mut self, indices: &[usize]) {
         let tracks: Vec<&Track> = indices
             .iter()
@@ -51,9 +51,9 @@ impl PlayerApp {
         }
     }
 
-    /// Просит подтвердить удаление альбомов или исполнителей `names` — треков медиатеки
-    /// с номерами `tracks`. Запоминаются пути, а не номера: пока диалог открыт, медиатека
-    /// может измениться
+    /// Asks to confirm removing albums or artists `names` — library tracks
+    /// with indices `tracks`. Paths are remembered, not indices: while the dialog is open, the library
+    /// may change
     pub(crate) fn request_group_removal(
         &mut self,
         kind: GroupKind,
@@ -64,7 +64,7 @@ impl PlayerApp {
         self.pending_removal = Some(LibraryRemoval { kind, names, paths });
     }
 
-    /// Диалог «точно удалить из библиотеки?» — пока ждём ответа
+    /// The "really remove from library?" dialog — while waiting for an answer
     pub(crate) fn render_removal_dialog(&mut self, ctx: &egui::Context) {
         let Some(removal) = &self.pending_removal else {
             return;

@@ -1,5 +1,5 @@
-//! Общее для страниц медиатеки: контекстные меню альбомов, исполнителей и треков,
-//! выборки треков исполнителя.
+//! Shared by library pages: context menus for albums, artists and tracks,
+//! artist track selections.
 
 use eframe::egui;
 
@@ -17,12 +17,12 @@ use crate::{
     },
 };
 
-/// Кнопка play поверх обложки в сетке: размер и отступ от угла обложки
+/// Play button over a cover in the grid: size and offset from the cover corner
 const OVERLAY_PLAY_SIZE: f32 = 32.0;
 const OVERLAY_PLAY_INSET: f32 = 8.0;
 
-/// Кнопка play в левом верхнем углу обложки плитки `tile` — проявляется при наведении
-/// на плитку. Возвращает `true`, если по ней кликнули
+/// Play button in the top left corner of the cover of tile `tile` — fades in on tile
+/// hover. Returns `true` if it was clicked
 pub(crate) fn overlay_play_button(
     ui: &mut egui::Ui,
     image_rect: egui::Rect,
@@ -41,19 +41,19 @@ pub(crate) fn overlay_play_button(
     play.clicked
 }
 
-/// Куда добавить треки из подменю «Add to playlist ›»
+/// Where to add tracks from the "Add to playlist ›" submenu
 #[derive(Clone, Copy)]
 pub(crate) enum PlaylistChoice {
-    /// В новый плейлист — сначала спросим название
+    /// To a new playlist — ask for the name first
     New,
     Existing(PlaylistId),
 }
 
-/// Сохранённые плейлисты для подменю «Add to playlist ›»: номер и название
+/// Saved playlists for the "Add to playlist ›" submenu: id and title
 pub(crate) type PlaylistEntries = [(PlaylistId, String)];
 
-/// Подменю «Add to playlist ›»: «New playlist…» и сохранённые плейлисты.
-/// Возвращает выбор
+/// The "Add to playlist ›" submenu: "New playlist…" and saved playlists.
+/// Returns the choice
 pub(crate) fn playlist_submenu(
     ui: &mut egui::Ui,
     playlists: &PlaylistEntries,
@@ -75,28 +75,28 @@ pub(crate) fn playlist_submenu(
     chosen
 }
 
-/// Что сделать с альбомом или исполнителем — из контекстного меню или кнопкой на обложке
+/// What to do with an album or artist — from the context menu or via the button on the cover
 #[derive(Clone, Copy)]
 pub(crate) enum GroupAction {
-    /// Заменить очередь их треками и играть
+    /// Replace the queue with their tracks and play
     Play,
     AddToQueue,
-    /// Их треки — в сохранённый плейлист
+    /// Their tracks — into a saved playlist
     AddToPlaylist(PlaylistChoice),
-    /// Убрать их треки из библиотеки (файлы не трогает)
+    /// Remove their tracks from the library (doesn't touch the files)
     Remove,
 }
 
-/// К каким плиткам относится действие
+/// Which tiles the action applies to
 pub(crate) enum Target {
-    /// Одна плитка: кнопка play на обложке
+    /// One tile: the play button on the cover
     One(usize),
-    /// Выделенные: контекстное меню, клавиша Delete
+    /// Selected ones: context menu, Delete key
     Selection,
 }
 
-/// Контекстное меню альбома или исполнителя. Действует на все выделенные плитки —
-/// в подписях их число. Возвращает выбранное действие
+/// Album or artist context menu. Acts on all selected tiles —
+/// their count is in the labels. Returns the chosen action
 pub(crate) fn group_context_menu(
     tile: &components::Tile,
     kind: GroupKind,
@@ -146,8 +146,8 @@ pub(crate) fn group_context_menu(
     action
 }
 
-/// Подписи меню списка треков медиатеки: добавить в плейлист и удалить из медиатеки.
-/// Для нескольких выделенных — с их числом
+/// Library track list menu labels: add to playlist and remove from library.
+/// For several selected — with their count
 pub(crate) fn track_menu_labels(selected: usize) -> (String, String) {
     let t = t();
     match selected {
@@ -164,8 +164,8 @@ pub(crate) fn track_menu_labels(selected: usize) -> (String, String) {
 }
 
 impl PlayerApp {
-    /// Куда ведёт «Go to album» для трека: страница его альбома — если трек в медиатеке
-    /// и у него известный альбом (см. `Core::album_of`). Иначе пункта в меню нет
+    /// Where "Go to album" leads for a track: its album page — if the track is in the library
+    /// and has a known album (see `Core::album_of`). Otherwise there's no menu item
     pub(crate) fn album_route(&mut self, track: &Track) -> Option<Route> {
         if !self.core.library.paths().contains(&track.path) {
             return None;
@@ -175,7 +175,7 @@ impl PlayerApp {
             .map(|album| Route::Album(AlbumKey::of(album)))
     }
 
-    /// Сохранённые плейлисты для подменю «Add to playlist ›»
+    /// Saved playlists for the "Add to playlist ›" submenu
     pub(crate) fn playlist_entries(&self) -> Vec<(PlaylistId, String)> {
         self.core
             .playlists
@@ -185,8 +185,8 @@ impl PlayerApp {
             .collect()
     }
 
-    /// Альбомы исполнителя `artist` (имя без учёта регистра, как при группировке),
-    /// в порядке сетки
+    /// Albums of artist `artist` (name case-insensitive, as in grouping),
+    /// in grid order
     pub(crate) fn artist_albums(&self, artist: &str) -> impl Iterator<Item = &AlbumGroup> {
         let artist = artist.to_lowercase();
         self.core
@@ -196,7 +196,7 @@ impl PlayerApp {
             .filter(move |album| album.artist.to_lowercase() == artist)
     }
 
-    /// Номера всех треков исполнителя в библиотеке: альбом за альбомом в порядке сетки
+    /// Library indices of all the artist's tracks: album by album in grid order
     pub(crate) fn artist_track_indices(&self, artist: &str) -> Vec<usize> {
         self.artist_albums(artist)
             .flat_map(|album| album.tracks.iter().copied())
@@ -204,8 +204,8 @@ impl PlayerApp {
     }
 }
 
-/// Пункт меню альбомов или исполнителей `names` — в действие над их треками медиатеки
-/// `tracks`, по порядку
+/// A menu item for albums or artists `names` — into an action on their library tracks
+/// `tracks`, in order
 pub(crate) fn group_action(
     action: GroupAction,
     kind: GroupKind,
@@ -219,7 +219,7 @@ pub(crate) fn group_action(
         GroupAction::AddToPlaylist(PlaylistChoice::Existing(id)) => {
             Action::AddToPlaylist { id, tracks }
         }
-        // Сразу не удаляем — сначала спрашиваем
+        // Don't remove right away — ask first
         GroupAction::Remove => Action::RequestGroupRemoval {
             kind,
             names,
@@ -228,20 +228,20 @@ pub(crate) fn group_action(
     }
 }
 
-/// Пункт меню списка треков медиатеки
+/// Library track list menu item
 pub(crate) enum TrackMenuItem {
     AddToQueue,
     AddToPlaylist(PlaylistChoice),
-    /// Открыть альбом трека
+    /// Open the track's album
     GoToAlbum(Route),
     RemoveFromLibrary,
 }
 
-/// Меню списка треков медиатеки: добавить в очередь, добавить в сохранённый плейлист,
-/// перейти к альбому и удалить из медиатеки. Для нескольких выделенных — с их числом.
-/// `album` — куда ведёт «Go to album» (см. `PlayerApp::album_route`); `None` — пункта нет:
-/// выделено несколько треков, альбом неизвестен или мы уже на его странице.
-/// Возвращает выбранный пункт
+/// Library track list menu: add to queue, add to a saved playlist,
+/// go to album and remove from library. For several selected — with their count.
+/// `album` — where "Go to album" leads (see `PlayerApp::album_route`); `None` — no item:
+/// several tracks are selected, the album is unknown, or we're already on its page.
+/// Returns the chosen item
 pub(crate) fn track_menu(
     ui: &mut egui::Ui,
     selected: usize,
@@ -268,7 +268,7 @@ pub(crate) fn track_menu(
 }
 
 impl TrackMenuItem {
-    /// Пункт меню — в действие над выделенными треками медиатеки `selected`
+    /// A menu item — into an action on the selected library tracks `selected`
     pub(crate) fn into_action(self, selected: Vec<usize>) -> Action {
         match self {
             TrackMenuItem::AddToQueue => Action::AddToQueue(selected),

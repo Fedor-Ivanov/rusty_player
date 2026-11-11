@@ -1,8 +1,8 @@
-//! Сетка плиток, как CSS `grid-template-columns: repeat(auto-fill, minmax(…, 1fr))`:
-//! число колонок подстраивается под ширину, плитки растягиваются на всю строку.
-//! Плитка — квадратная картинка и несколько строк текста под ней. Виртуализирована,
-//! как и списки: рисуются только видимые строки сетки. Выделение — как в списке треков:
-//! ⌘/Shift+клик, рамкой мыши, клавиши ⌘A, Esc, Delete.
+//! A tile grid, like CSS `grid-template-columns: repeat(auto-fill, minmax(…, 1fr))`:
+//! the column count adapts to the width, tiles stretch across the whole row.
+//! A tile is a square image with a few lines of text under it. Virtualized,
+//! like the lists: only visible grid rows are drawn. Selection works like in the track list:
+//! ⌘/Shift+click, mouse marquee, ⌘A, Esc, Delete keys.
 
 use eframe::egui::{
     self, Align, Color32, CursorIcon, FontId, Key, Rect, Response, RichText, Sense, Stroke,
@@ -16,64 +16,64 @@ use crate::ui::style::theme::{
     TEXT_MUTED,
 };
 
-/// Плитка не уже этого: колонок столько, сколько таких плиток помещается
+/// A tile is no narrower than this: there are as many columns as such tiles fit
 const TILE_MIN_WIDTH: f32 = 140.0;
 const TILE_GAP: f32 = 18.0;
-/// Сколько рядов выше и ниже видимых считаются соседними — их картинки готовятся заранее
+/// How many rows above and below the visible ones count as nearby — their images are prepared in advance
 const NEARBY_ROWS: usize = 2;
-/// Отступ сверху: рамка выделения выходит за плитку и у первой строки иначе обрезалась бы
-/// краем прокрутки
+/// Top padding: the selection frame extends beyond the tile and would otherwise be clipped
+/// by the scroll edge on the first row
 const TOP_MARGIN: f32 = 8.0;
 const SIDE_MARGIN: f32 = 16.0;
-/// Зазор между картинкой и текстом и между строками текста
+/// Gap between the image and the text and between text lines
 const TEXT_TOP_GAP: f32 = 8.0;
 const LINE_GAP: f32 = 2.0;
 const PRIMARY_SIZE: f32 = 14.0;
 const SECONDARY_SIZE: f32 = 12.0;
-/// Рамка выделенной плитки: отступ от плитки (чтобы не ложилась на край обложки)
-/// и скругление
+/// Selected tile frame: offset from the tile (so it doesn't lie on the cover's edge)
+/// and rounding
 const HIGHLIGHT_PADDING: f32 = 6.0;
 const HIGHLIGHT_RADIUS: u8 = 14;
-/// Скорость автопрокрутки при выделении областью — как у списка треков
+/// Auto-scroll speed during marquee selection — same as the track list
 const MARQUEE_AUTOSCROLL_SPEED: f32 = 8.0;
 
-/// Плитка, которую сейчас рисуют
+/// The tile being drawn now
 pub struct Tile {
-    /// Плавное наведение 0.0..=1.0 — по положению курсора над плиткой: остаётся и тогда,
-    /// когда курсор над кнопкой поверх плитки
+    /// Smooth hover 0.0..=1.0 — by the cursor position over the tile: stays even
+    /// when the cursor is over a button on top of the tile
     pub hover: f32,
-    /// Отклик всей плитки (картинка с подписью) — для контекстного меню
+    /// Response of the whole tile (image with caption) — for the context menu
     pub response: Response,
-    /// Сколько плиток выделено — меню по правому клику действует на них все
+    /// How many tiles are selected — the right-click menu acts on all of them
     pub selected: usize,
 }
 
-/// Строка текста под картинкой плитки
+/// A line of text under the tile image
 pub struct TileLine {
     pub text: String,
-    /// Первая строка (название) — крупнее и ярче остальных
+    /// The first line (title) is larger and brighter than the rest
     pub primary: bool,
 }
 
-/// Что произошло с сеткой за кадр — решает вызывающий
+/// What happened to the grid during the frame — the caller decides
 pub struct TileGridResponse {
-    /// Обычный клик по плитке (без ⌘/Shift) — открыть её
+    /// A plain click on a tile (without ⌘/Shift) — open it
     pub opened: Option<usize>,
-    /// Нажали Delete или Backspace, пока сетка активна и что-то выделено
+    /// Delete or Backspace was pressed while the grid is active and something is selected
     pub delete: bool,
-    /// С сеткой работали мышью — она становится активной для клавиатуры
+    /// The grid was used with the mouse — it becomes active for the keyboard
     pub interacted: bool,
 }
 
-/// Состояние одной сетки между кадрами: выделение и выделение областью
+/// State of one grid between frames: selection and marquee selection
 pub struct TileGridView {
-    /// Различает сетки: у каждой свои id прокрутки и фона
+    /// Distinguishes grids: each has its own scroll and background ids
     id: &'static str,
     selection: Selection,
     marquee: Option<Marquee>,
-    /// К какому содержимому относится выделение (см. `set_scope`)
+    /// Which content the selection belongs to (see `set_scope`)
     scope: String,
-    /// Плитки видимых рядов и соседних с ними — по последнему `show` (см. `nearby`)
+    /// Tiles of visible rows and their neighbors — as of the last `show` (see `nearby`)
     nearby: Range<usize>,
 }
 
@@ -88,9 +88,9 @@ impl TileGridView {
         }
     }
 
-    /// Выделение — номера плиток. Если содержимое сетки сменилось (другой исполнитель,
-    /// библиотека изменилась), те же номера значат другие плитки — выделение сбрасывается.
-    /// `scope` описывает содержимое; вызывать каждый кадр до `show`
+    /// Selection is tile indices. If the grid content changed (another artist,
+    /// the library changed), the same indices mean other tiles — the selection is reset.
+    /// `scope` describes the content; call every frame before `show`
     pub fn set_scope(&mut self, scope: &str) {
         if self.scope != scope {
             self.selection.clear();
@@ -103,17 +103,17 @@ impl TileGridView {
         self.selection.indices()
     }
 
-    /// Плитки на экране и в `NEARBY_ROWS` рядах выше и ниже — по последнему `show`. Их
-    /// картинки стоит заказать заранее: при прокрутке они будут готовы
+    /// Tiles on screen and in `NEARBY_ROWS` rows above and below — as of the last `show`. Their
+    /// images are worth requesting in advance: they'll be ready when scrolling
     pub fn nearby(&self) -> Range<usize> {
         self.nearby.clone()
     }
 
-    /// Рисует сетку из `count` плиток с `line_count` строками текста в каждой. `text_align` —
-    /// выравнивание текста под картинкой: `Align::Min` — по левому краю, `Align::Center` —
-    /// по центру. `keyboard` — активна ли сетка для клавиш (⌘A, Esc, Delete).
-    /// `tile` рисует картинку плитки `index` в квадрате `image_rect` (может добавить поверх
-    /// неё свои кнопки и меню через [`Tile`]) и возвращает строки текста под ней.
+    /// Draws a grid of `count` tiles with `line_count` lines of text each. `text_align` —
+    /// text alignment under the image: `Align::Min` — left, `Align::Center` —
+    /// centered. `keyboard` — whether the grid is active for keys (⌘A, Esc, Delete).
+    /// `tile` draws the image of tile `index` in square `image_rect` (it may add its own buttons
+    /// and menus on top via [`Tile`]) and returns the text lines under it.
     pub fn show(
         &mut self,
         ui: &mut Ui,
@@ -132,7 +132,7 @@ impl TileGridView {
             return response;
         }
 
-        // Пока набирают текст (например, в поиске), Backspace и ⌘A — для текста, а не для списка
+        // While text is being typed (e.g. in search), Backspace and ⌘A are for the text, not for the list
         if keyboard && !ui.ctx().text_edit_focused() {
             let (delete, select_all, deselect) = ui.input(|i| {
                 (
@@ -153,8 +153,8 @@ impl TileGridView {
         let width = (ui.available_width() - 2.0 * SIDE_MARGIN).max(TILE_MIN_WIDTH);
         let columns = (((width + TILE_GAP) / (TILE_MIN_WIDTH + TILE_GAP)).floor() as usize).max(1);
         let tile_width = (width - TILE_GAP * (columns - 1) as f32) / columns as f32;
-        // Высота строки сетки фиксированная (картинка + все строки текста) — без этого сетку
-        // нельзя виртуализировать, а номер плитки под курсором — вычислить
+        // The grid row height is fixed (image + all text lines) — without this the grid
+        // can't be virtualized, nor can the tile index under the cursor be computed
         let row_height = tile_width + TEXT_TOP_GAP + text_height(ui, line_count);
         let rows = count.div_ceil(columns);
         let modifiers = ui.input(|i| i.modifiers);
@@ -173,10 +173,10 @@ impl TileGridView {
                 let first_row = visible_rows.start.saturating_sub(NEARBY_ROWS);
                 let end_row = (visible_rows.end + NEARBY_ROWS).min(rows);
                 nearby = first_row * columns..(end_row * columns).min(count);
-                // Верх и левый край всего содержимого сетки на экране: show_rows отдаёт
-                // только видимый кусок, начиная со строки visible_rows.start. Плитки под рамкой
-                // считаются по размерам сетки, а не по нарисованным виджетам — плиток
-                // за пределами экрана нет, а выделять их рамкой нужно
+                // Top and left edge of the whole grid content on screen: show_rows yields
+                // only the visible chunk, starting at row visible_rows.start. Tiles under the frame
+                // are computed from the grid dimensions, not from drawn widgets — tiles
+                // off screen don't exist, but they still need to be selectable by the frame
                 let row_stride = row_height + TILE_GAP;
                 let content_top = ui.max_rect().top() - visible_rows.start as f32 * row_stride;
                 let content_left = ui.max_rect().left();
@@ -190,9 +190,9 @@ impl TileGridView {
                     )
                 };
 
-                // Фон под плитками — для выделения областью и клика по пустому месту.
-                // Добавляется до плиток: плитки оказываются сверху и получают клики,
-                // а перетаскивание достаётся фону (плитки его не ловят)
+                // Background under the tiles — for marquee selection and clicks on empty space.
+                // Added before the tiles: the tiles end up on top and get clicks,
+                // while dragging goes to the background (tiles don't catch it)
                 let visible = ui.clip_rect();
                 let background = ui.interact(
                     visible,
@@ -208,7 +208,7 @@ impl TileGridView {
                 {
                     self.marquee = Some(Marquee {
                         start: pos2(start.x, start.y - content_top),
-                        // С ⌘/Ctrl область добавляется к уже выделенному
+                        // With ⌘/Ctrl the area is added to the existing selection
                         base: if modifiers.command {
                             self.selection.indices().clone()
                         } else {
@@ -229,17 +229,17 @@ impl TileGridView {
                         let image_rect =
                             Rect::from_min_size(rect.min, vec2(tile_width, tile_width));
 
-                        // Плитка целиком — картинка вместе с подписью. Добавляется до
-                        // содержимого: кнопки, которые плитка рисует поверх картинки,
-                        // получают клики первыми
+                        // The whole tile — the image together with the caption. Added before
+                        // the content: buttons the tile draws on top of the image
+                        // get clicks first
                         let tile_id = ui.scope_id().with((self.id, index));
                         let tile_response = ui
                             .interact(rect, tile_id, Sense::click())
                             .on_hover_cursor(CursorIcon::PointingHand);
 
-                        // Клик без модификаторов открывает плитку; ⌘/Shift+клик выделяет,
-                        // как в списке. Правый клик по невыделенной плитке выделяет её —
-                        // меню действует на выделение, как в Finder
+                        // A click without modifiers opens the tile; ⌘/Shift+click selects,
+                        // as in the list. A right click on an unselected tile selects it —
+                        // the menu acts on the selection, like in Finder
                         if tile_response.clicked() {
                             if modifiers.command || modifiers.shift {
                                 self.selection.click(index, modifiers);
@@ -262,8 +262,8 @@ impl TileGridView {
                             HOVER_FADE_SECS,
                             egui::emath::easing::cubic_out,
                         );
-                        // Выделенная плитка и плитка с открытым меню обведены рамкой,
-                        // как выделенный трек в списке
+                        // A selected tile and a tile with an open menu get a frame,
+                        // like a selected track in the list
                         let highlighted = ui.ctx().animate_bool_with_time_and_easing(
                             tile_id.with("highlighted"),
                             self.selection.contains(index) || tile_response.context_menu_opened(),
@@ -302,7 +302,7 @@ impl TileGridView {
                     }
                 }
 
-                // Рамка — после плиток, чтобы лежала поверх них
+                // The frame — after the tiles, so it lies on top of them
                 if let Some(marquee) = &self.marquee
                     && background.dragged()
                     && let Some(pointer) = background.interact_pointer_pos()
@@ -310,8 +310,8 @@ impl TileGridView {
                     let start = pos2(marquee.start.x, content_top + marquee.start.y);
                     let area = Rect::from_two_pos(start, pointer);
 
-                    // Плитки, которых касается рамка: строки — по высоте сетки, в каждой —
-                    // колонки, чей прямоугольник пересекается с рамкой
+                    // Tiles touched by the frame: rows — by the grid height, in each —
+                    // columns whose rectangle intersects the frame
                     let row_at = |y: f32| {
                         ((((y - content_top) / row_stride).floor()).max(0.0) as usize).min(rows - 1)
                     };
@@ -332,8 +332,8 @@ impl TileGridView {
                         StrokeKind::Inside,
                     );
 
-                    // Курсор ушёл за верх или низ сетки — прокручиваем туда, тем быстрее,
-                    // чем дальше курсор. Положительная дельта сдвигает содержимое вниз
+                    // The cursor went above or below the grid — scroll there, the faster
+                    // the farther the cursor. A positive delta moves the content down
                     let overshoot = if pointer.y < visible.top() {
                         visible.top() - pointer.y
                     } else if pointer.y > visible.bottom() {
@@ -357,7 +357,7 @@ impl TileGridView {
     }
 }
 
-/// Высота текста под картинкой: первая строка крупнее, остальные мельче
+/// Height of the text under the image: the first line is larger, the rest smaller
 fn text_height(ui: &Ui, line_count: usize) -> f32 {
     let line_height = |size: f32| {
         ui.painter()
@@ -377,7 +377,7 @@ fn text_height(ui: &Ui, line_count: usize) -> f32 {
         + LINE_GAP * line_count.saturating_sub(1) as f32
 }
 
-/// Строки под картинкой, обрезанные с «…» по ширине плитки
+/// Lines under the image, truncated with "…" to the tile width
 fn paint_lines(ui: &Ui, lines: &[TileLine], mut pos: egui::Pos2, width: f32, align: Align) {
     for line in lines {
         let (size, color): (f32, Color32) = if line.primary {
@@ -393,7 +393,7 @@ fn paint_lines(ui: &Ui, lines: &[TileLine], mut pos: egui::Pos2, width: f32, ali
                 FontId::proportional(size),
             );
         let size = galley.size();
-        // Свободное место по ширине — слева, поровну с обеих сторон или справа
+        // Free horizontal space — on the left, split evenly on both sides, or on the right
         let x = pos.x + (width - size.x).max(0.0) * align.to_factor();
         ui.painter().galley(pos2(x, pos.y), galley, color);
         pos.y += size.y + LINE_GAP;

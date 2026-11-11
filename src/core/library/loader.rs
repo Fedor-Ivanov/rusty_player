@@ -1,9 +1,9 @@
-//! Фоновое добавление треков. Чтение тегов и проверка формата для тысяч файлов занимают
-//! секунды и минуты — в потоке интерфейса окно бы на это время зависло. Здесь файлы
-//! обрабатываются в нескольких потоках; треки копятся и отдаются разом, когда готово всё —
-//! так в списке сразу весь выбор, и нужный трек из конца папки можно найти.
+//! Background track adding. Reading tags and checking the format of thousands of files takes
+//! seconds to minutes — on the UI thread the window would freeze for that time. Here files
+//! are processed on several threads; tracks are accumulated and handed over at once when everything is done —
+//! so the list has the whole selection at once, and a track from the end of the folder can be found.
 //!
-//! Отменить добавление — просто уронить `Loader`: потоки заметят закрытый канал и остановятся.
+//! To cancel adding, just drop the `Loader`: the threads notice the closed channel and stop.
 
 use std::{
     collections::{BTreeMap, HashSet},
@@ -19,23 +19,23 @@ use std::{
 
 use super::{scan::find_audio_files, track::Track};
 
-/// Больше потоков не даёт выигрыша: упираемся в чтение с диска
+/// More threads give no gain: disk reads are the bottleneck
 const MAX_WORKERS: usize = 8;
 
-/// Что добавляем
+/// What is being added
 pub enum Source {
     Files(Vec<PathBuf>),
-    /// Все аудиофайлы в папке, включая вложенные
+    /// All audio files in a folder, including subfolders
     Folder(PathBuf),
 }
 
 enum Message {
-    /// Сколько файлов будет обработано и сколько пропущено, потому что они уже есть
-    /// у получателя, — известно после обхода папки
+    /// How many files will be processed and how many skipped because the receiver already
+    /// has them — known after the folder walk
     Total(usize, usize),
-    /// Результат для файла с номером `usize` в исходном порядке
+    /// Result for the file with index `usize` in the original order
     Loaded(usize, Result<Track, String>),
-    /// Папку не удалось прочитать
+    /// The folder could not be read
     Failed(String),
 }
 
@@ -44,9 +44,9 @@ pub struct Loader {
     started: Instant,
     total: Option<usize>,
     skipped: usize,
-    /// Номер следующего результата по порядку — треки собираются строго в исходном порядке
+    /// Index of the next result in order — tracks are collected strictly in the original order
     next: usize,
-    /// Результаты, пришедшие раньше своей очереди: потоки работают параллельно
+    /// Results that arrived ahead of their turn: threads run in parallel
     pending: BTreeMap<usize, Result<Track, String>>,
     tracks: Vec<Track>,
     errors: Vec<String>,
@@ -54,8 +54,8 @@ pub struct Loader {
 }
 
 impl Loader {
-    /// Начинает добавление. Файлы из `skip` пропускаются без чтения — например, те,
-    /// что уже есть в библиотеке
+    /// Starts adding. Files from `skip` are skipped without reading — e.g. those
+    /// already in the library
     pub fn start(source: Source, skip: HashSet<PathBuf>) -> Self {
         let (tx, messages) = mpsc::channel();
         thread::spawn(move || run(source, skip, tx));
@@ -72,7 +72,7 @@ impl Loader {
         }
     }
 
-    /// Принимает результаты, готовые к этому моменту. Не блокирует. Вызывать каждый кадр
+    /// Takes the results ready by now. Non-blocking. Call every frame
     pub fn update(&mut self) {
         loop {
             match self.messages.try_recv() {
@@ -89,8 +89,8 @@ impl Loader {
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
-                    // Все потоки завершились; если какой-то упал, недостающих треков
-                    // уже не будет — не ждём их вечно
+                    // All threads have finished; if one crashed, the missing tracks
+                    // will never come — don't wait for them forever
                     if self
                         .total
                         .is_none_or(|total| self.next + self.pending.len() < total)
@@ -115,18 +115,18 @@ impl Loader {
         self.failed || self.total.is_some_and(|total| self.next >= total)
     }
 
-    /// Сколько файлов обработано и сколько всего; `None`, пока идёт обход папки
+    /// How many files are processed and how many in total; `None` while the folder walk is running
     pub fn progress(&self) -> Option<(usize, usize)> {
         self.total
             .map(|total| (self.next + self.pending.len(), total))
     }
 
-    /// Сколько прошло с начала добавления
+    /// Time elapsed since adding started
     pub fn elapsed(&self) -> Duration {
         self.started.elapsed()
     }
 
-    /// Итог: треки в исходном порядке, ошибки по файлам и сколько файлов нашлось
+    /// Result: tracks in the original order, per-file errors, and how many files were found
     pub fn finish(self) -> Finished {
         Finished {
             tracks: self.tracks,
@@ -139,14 +139,16 @@ impl Loader {
 
 pub struct Finished {
     pub tracks: Vec<Track>,
-    /// Ошибки по файлам, которые не удалось добавить
+    /// Errors for files that could not be added
     pub errors: Vec<String>,
-    /// `None`, если папку не удалось прочитать
+    /// `None` if the folder could not be read
     pub total: Option<usize>,
-    /// Сколько файлов пропущено, потому что они уже есть у получателя
+    /// How many files were skipped because the receiver already has them
     pub skipped: usize,
 }
 
+/// Background part of `Loader::start`: walks the folder, then reads the files on several
+/// threads. Results arrive in any order with their index — `update` puts them back in order
 fn run(source: Source, skip: HashSet<PathBuf>, tx: Sender<Message>) {
     let mut paths = match source {
         Source::Files(paths) => paths,
@@ -162,7 +164,7 @@ fn run(source: Source, skip: HashSet<PathBuf>, tx: Sender<Message>) {
     paths.retain(|path| !skip.contains(path));
     let _ = tx.send(Message::Total(paths.len(), found - paths.len()));
 
-    // Потоки берут файлы по очереди из общего счётчика: быстрые файлы не ждут медленных
+    // Threads take files in turn from a shared counter: fast files don't wait for slow ones
     let paths = Arc::new(paths);
     let next = Arc::new(AtomicUsize::new(0));
     let workers = thread::available_parallelism()
@@ -182,7 +184,7 @@ fn run(source: Source, skip: HashSet<PathBuf>, tx: Sender<Message>) {
                     .to_string_lossy()
                     .into_owned();
                 let result = Track::from_path(path.clone()).map_err(|e| format!("{name}: {e}"));
-                // Получатель пропал — интерфейс закрыт, работать дальше незачем
+                // The receiver is gone — the UI is closed, no point in continuing
                 if tx.send(Message::Loaded(index, result)).is_err() {
                     break;
                 }
@@ -196,7 +198,7 @@ mod tests {
     use super::{Loader, Source};
     use std::{fs, path::Path, thread, time::Duration};
 
-    /// Минимальный корректный WAV: 16-бит моно, 8 кГц, 0,1 с тишины
+    /// Minimal valid WAV: 16-bit mono, 8 kHz, 0.1 s of silence
     fn write_wav(path: &Path) {
         let samples = 800u32;
         let data_len = samples * 2;
@@ -206,11 +208,11 @@ mod tests {
         bytes.extend(b"WAVEfmt ");
         bytes.extend(16u32.to_le_bytes());
         bytes.extend(1u16.to_le_bytes()); // PCM
-        bytes.extend(1u16.to_le_bytes()); // моно
+        bytes.extend(1u16.to_le_bytes()); // mono
         bytes.extend(8000u32.to_le_bytes());
-        bytes.extend(16000u32.to_le_bytes()); // байт в секунду
-        bytes.extend(2u16.to_le_bytes()); // байт на сэмпл
-        bytes.extend(16u16.to_le_bytes()); // бит на сэмпл
+        bytes.extend(16000u32.to_le_bytes()); // bytes per second
+        bytes.extend(2u16.to_le_bytes()); // bytes per sample
+        bytes.extend(16u16.to_le_bytes()); // bits per sample
         bytes.extend(b"data");
         bytes.extend(data_len.to_le_bytes());
         bytes.resize(bytes.len() + data_len as usize, 0);
@@ -225,7 +227,7 @@ mod tests {
         for name in &names {
             write_wav(&dir.join(name));
         }
-        // Битый файл с подходящим расширением — должен попасть в ошибки, а не в список
+        // A broken file with a matching extension — must end up in errors, not in the list
         fs::write(dir.join("99.mp3"), b"not audio").unwrap();
 
         let skip = [dir.join("05.wav")].into_iter().collect();
@@ -240,7 +242,7 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
 
         assert!(loader.is_finished());
-        // 05.wav был в `skip` — его не читали
+        // 05.wav was in `skip` — it was not read
         assert_eq!(loader.progress(), Some((40, 40)));
         let result = loader.finish();
         let loaded: Vec<String> = result

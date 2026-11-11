@@ -1,35 +1,35 @@
-//! Фото исполнителя из Deezer: поиск исполнителя по имени — открытый API, без ключа.
-//! Отсюда — только ссылка на фото: хранить сами фото Deezer нельзя.
+//! Artist photos from Deezer: artist search by name is an open API, no key needed.
+//! Only the photo link comes from here: storing Deezer photos themselves is not allowed.
 
 use serde::Deserialize;
 
 use crate::core::net;
 
 const SEARCH_URL: &str = "https://api.deezer.com/search/artist";
-/// Столько исполнителей просим у поиска: однофамильцев бывает несколько
+/// How many artists to request from search: there can be several namesakes
 const SEARCH_LIMIT: &str = "10";
 
 #[derive(Deserialize)]
 struct Search {
     #[serde(default)]
     data: Vec<Artist>,
-    /// Deezer сообщает об ошибках (например, превышен лимит запросов) с кодом 200
+    /// Deezer reports errors (e.g. rate limit exceeded) with status 200
     error: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 struct Artist {
     name: String,
-    /// Число поклонников — по нему из однофамильцев выбирается известный
+    /// Fan count — used to pick the well-known one among namesakes
     #[serde(default)]
     nb_fan: u64,
     /// 500×500
     picture_big: Option<String>,
 }
 
-/// Ссылка на фото исполнителя `name`: `Ok(None)` — в Deezer такого исполнителя нет или
-/// у него нет фото. Само фото не скачивается: его загружают по ссылке, когда оно нужно
-/// на экране. Ошибка — сеть или сервис: можно спросить снова
+/// Link to the photo of artist `name`: `Ok(None)` — Deezer has no such artist or
+/// the artist has no photo. The photo itself is not downloaded: it is loaded from the link when
+/// needed on screen. Error — network or service failure: can ask again
 pub fn find_picture(name: &str) -> Result<Option<String>, String> {
     let mut response = net::agent()
         .get(SEARCH_URL)
@@ -50,8 +50,8 @@ pub fn find_picture(name: &str) -> Result<Option<String>, String> {
     Ok(best_picture(search.data, name))
 }
 
-/// Ссылка на фото исполнителя с тем же именем (без учёта регистра); из однофамильцев —
-/// самого известного. Похожие имена не годятся: лучше заглушка, чем чужое лицо
+/// Photo link of the artist with the same name (case-insensitive); among namesakes —
+/// the most famous one. Similar names won't do: a placeholder is better than someone else's face
 fn best_picture(artists: Vec<Artist>, name: &str) -> Option<String> {
     let name = name.trim().to_lowercase();
     artists
@@ -59,7 +59,7 @@ fn best_picture(artists: Vec<Artist>, name: &str) -> Option<String> {
         .filter(|artist| artist.name.trim().to_lowercase() == name)
         .filter_map(|artist| {
             let url = artist.picture_big?;
-            // Без фото Deezer отдаёт ссылку на заглушку с пустым идентификатором картинки
+            // Without a photo, Deezer returns a placeholder link with an empty image id
             (!url.contains("/artist//")).then_some((artist.nb_fan, url))
         })
         .max_by_key(|(fans, _)| *fans)
@@ -84,7 +84,7 @@ mod tests {
             artist("HIM", 68, "https://img/artist/a/500.jpg"),
             artist("HIM", 210_403, "https://img/artist/b/500.jpg"),
             artist("H.I.M.", 1_000_000, "https://img/artist/c/500.jpg"),
-            // Самый известный, но без фото
+            // The most famous one, but without a photo
             artist("him", 5_000_000, "https://img/artist//500.jpg"),
         ];
         assert_eq!(

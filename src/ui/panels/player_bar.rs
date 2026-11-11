@@ -1,4 +1,4 @@
-//! Нижняя панель: громкость, prev / play-pause / next, время и ползунок перемотки.
+//! Bottom panel: volume, prev / play-pause / next, time and the seek slider.
 
 use eframe::egui::{
     self, Align2, CornerRadius, CursorIcon, FontId, Id, Order, Pos2, Rangef, Rect, Sense, Stroke,
@@ -22,25 +22,25 @@ use crate::{
 const PLAY_BUTTON_SIZE: f32 = 60.0;
 const PLAY_MORPH_SECS: f32 = 0.25;
 const SKIP_BUTTON_SIZE: f32 = 40.0;
-// Зазор между кнопкой play и кнопками prev/next
+// Gap between the play button and the prev/next buttons
 const SKIP_BUTTON_GAP: f32 = 4.0;
 const SLIDER_TRACK_HEIGHT: f32 = 5.0;
 const SLIDER_THUMB_RADIUS: f32 = 8.0;
 const VOLUME_BUTTON_SIZE: f32 = 24.0;
-/// Вертикальный блок с ползунком громкости над кнопкой: размер, зазор до кнопки,
-/// скругление, отступы сверху и снизу
+/// Vertical block with the volume slider above the button: size, gap to the button,
+/// rounding, top and bottom padding
 const VOLUME_POPUP_SIZE: Vec2 = vec2(36.0, 140.0);
 const VOLUME_POPUP_GAP: f32 = 6.0;
 const VOLUME_POPUP_RADIUS: u8 = 12;
 const VOLUME_POPUP_PADDING: f32 = 14.0;
 const VOLUME_TRACK_WIDTH: f32 = 4.0;
 const VOLUME_THUMB_RADIUS: f32 = 6.0;
-/// Прокрутка колесом над громкостью: сколько точек прокрутки на всю шкалу
+/// Wheel scrolling over the volume: how many scroll points for the full scale
 const VOLUME_SCROLL_RANGE: f32 = 400.0;
 
 impl PlayerApp {
     pub(crate) fn render_controls(&mut self, ui: &mut Ui) {
-        // Строка над временем: справа громкость
+        // Row above the time: volume on the right
         let (row, _) = ui.allocate_exact_size(
             vec2(ui.available_width(), VOLUME_BUTTON_SIZE),
             Sense::hover(),
@@ -60,7 +60,7 @@ impl PlayerApp {
             .unwrap_or(self.core.controller.position_ms() as f32 / 1000.0)
             .min(duration);
 
-        // Ряд: время слева, кнопка по центру, длительность справа
+        // Row: time on the left, button in the center, duration on the right
         let (row, _) =
             ui.allocate_exact_size(vec2(ui.available_width(), PLAY_BUTTON_SIZE), Sense::hover());
 
@@ -74,8 +74,8 @@ impl PlayerApp {
                 font.clone(),
                 TEXT_MUTED,
             );
-            // Справа — сколько осталось. Округляем вверх: format_secs отбрасывает дробную
-            // часть, и иначе прошедшее + оставшееся давало бы на секунду меньше длительности
+            // On the right — the time remaining. Round up: format_secs drops the fractional
+            // part, and otherwise elapsed + remaining would be a second less than the duration
             let remaining = (duration - position).max(0.0).ceil();
             painter.text(
                 row.right_center(),
@@ -86,7 +86,7 @@ impl PlayerApp {
             );
         }
 
-        // prev и next стоят по бокам от play
+        // prev and next sit on either side of play
         let play_rect =
             Rect::from_center_size(row.center(), vec2(PLAY_BUTTON_SIZE, PLAY_BUTTON_SIZE));
         let skip_offset = vec2(
@@ -97,7 +97,7 @@ impl PlayerApp {
         let prev_rect = Rect::from_center_size(row.center() - skip_offset, skip_size);
         let next_rect = Rect::from_center_size(row.center() + skip_offset, skip_size);
 
-        // prev/next реагируют только на контур иконки, а не на весь квадрат вокруг неё
+        // prev/next react only to the icon outline, not to the whole square around it
         let prev = components::icon_button(
             ui,
             skip_hit_rect(prev_rect),
@@ -107,7 +107,7 @@ impl PlayerApp {
         );
         paint_skip(ui, prev_rect, false, !has_track, prev.hover);
 
-        // У play чёткий круг, поэтому и наведение считаем только внутри него
+        // play has a clear circle, so hover is also counted only inside it
         let play = components::icon_button(
             ui,
             play_rect,
@@ -115,7 +115,7 @@ impl PlayerApp {
             "play_pause",
             has_track,
         );
-        // 0.0 — треугольник play, 1.0 — полоски pause
+        // 0.0 — the play triangle, 1.0 — the pause bars
         let morph = ui.ctx().animate_bool_with_time_and_easing(
             play.response.id,
             playing,
@@ -174,7 +174,7 @@ impl PlayerApp {
             }
 
             if response.drag_stopped() || response.clicked() {
-                // При отпускании курсор может быть уже недоступен — берём последнюю позицию драга
+                // On release the cursor may be unavailable already — take the last drag position
                 let secs = response
                     .interact_pointer_pos()
                     .map(value_at)
@@ -196,9 +196,9 @@ impl PlayerApp {
         components::paint_slider(ui, rect, fraction, SLIDER_TRACK_HEIGHT, SLIDER_THUMB_RADIUS);
     }
 
-    /// Громкость: кнопка у правого края строки `row`, над оставшимся временем. Клик — mute.
-    /// При наведении над кнопкой появляется блок с ползунком; он не прячется, пока курсор
-    /// на кнопке, на блоке или между ними и пока ползунок тянут
+    /// Volume: a button at the right edge of row `row`, above the remaining time. Click — mute.
+    /// On hover a block with a slider appears above the button; it doesn't hide while the cursor
+    /// is on the button, on the block or between them, and while the slider is dragged
     fn render_volume(&mut self, ui: &mut Ui, row: Rect) {
         let button_rect = Rect::from_min_size(
             pos2(row.right() - VOLUME_BUTTON_SIZE, row.top()),
@@ -222,7 +222,7 @@ impl PlayerApp {
             button.hover,
         );
 
-        // Блок по центру над кнопкой, но в пределах окна
+        // The block is centered above the button, but within the window
         let window = ui.ctx().content_rect();
         let mut popup = Rect::from_center_size(
             pos2(
@@ -239,7 +239,7 @@ impl PlayerApp {
             data.get_temp::<bool>(popup_id.with("open"))
                 .unwrap_or(false)
         });
-        // Прямоугольник, охватывающий кнопку и блок: курсор идёт от кнопки к блоку через зазор
+        // A rectangle covering the button and the block: the cursor goes from the button to the block through the gap
         let in_zone = ui
             .ctx()
             .pointer_hover_pos()
@@ -256,7 +256,7 @@ impl PlayerApp {
             return;
         }
 
-        // Колесо мыши над кнопкой или блоком — тоже громкость
+        // The mouse wheel over the button or the block also controls volume
         if open && in_zone {
             let scroll = ui.input(|input| input.smooth_scroll_delta.y);
             if scroll != 0.0 {
@@ -265,7 +265,7 @@ impl PlayerApp {
             }
         }
 
-        // Блок — поверх центральной области: он выше нижней панели
+        // The block is above the central area: it's taller than the bottom panel
         let mut level = None;
         let audible = self.core.controller.volume().audible();
         egui::Area::new(popup_id)
@@ -283,7 +283,7 @@ impl PlayerApp {
                     StrokeKind::Inside,
                 );
 
-                // Тянуть можно за всю ширину блока, а не только за тонкую дорожку
+                // It can be dragged across the full block width, not just the thin track
                 let slider = rect.shrink2(vec2(0.0, VOLUME_POPUP_PADDING));
                 let response = ui
                     .interact(slider, slider_id, Sense::click_and_drag())
@@ -292,7 +292,7 @@ impl PlayerApp {
                 if (response.dragged() || response.clicked())
                     && let Some(pos) = response.interact_pointer_pos()
                 {
-                    // Снизу вверх: внизу тишина, вверху максимум
+                    // Bottom to top: silence at the bottom, maximum at the top
                     level = Some(((scale.max - pos.y) / scale.span()).clamp(0.0, 1.0));
                 }
                 paint_vertical_slider(ui, slider, level.unwrap_or(audible));
@@ -303,14 +303,14 @@ impl PlayerApp {
     }
 }
 
-/// Где по высоте ходит центр бегунка вертикального ползунка в `rect`: от низа (0.0) до
-/// верха (1.0), с отступом на радиус бегунка — он не вылезает за края
+/// Where the vertical slider thumb center moves in `rect`: from the bottom (0.0) to
+/// the top (1.0), inset by the thumb radius — it doesn't go past the edges
 fn vertical_scale(rect: Rect, thumb_radius: f32) -> Rangef {
     Rangef::new(rect.top() + thumb_radius, rect.bottom() - thumb_radius)
 }
 
-/// Вертикальный ползунок громкости в `rect`: дорожка по центру, заполненная снизу до
-/// `fraction` (0.0..=1.0), и круглый бегунок
+/// Vertical volume slider in `rect`: a centered track, filled from the bottom up to
+/// `fraction` (0.0..=1.0), and a round thumb
 fn paint_vertical_slider(ui: &Ui, rect: Rect, fraction: f32) {
     let painter = ui.painter();
     let track = Rect::from_center_size(rect.center(), vec2(VOLUME_TRACK_WIDTH, rect.height()));

@@ -1,4 +1,4 @@
-//! Тексты интерфейса на украинском.
+//! UI texts in Ukrainian.
 
 use super::{Plural, Texts, slavic_plural_form};
 

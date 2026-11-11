@@ -1,4 +1,4 @@
-//! Внешний вид: цвета, иконки и системное стекло окна.
+//! Appearance: colors, icons and the system window glass.
 
 pub mod icons;
 pub mod theme;

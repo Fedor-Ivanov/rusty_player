@@ -1,6 +1,6 @@
-//! Страницы центральной области: что открыто — решает `Route` (см. `navigation`).
-//! Каждая страница — отдельный файл с `impl PlayerApp`; здесь — выбор страницы, заголовок
-//! с «хлебными крошками» и поиском и общее для страниц.
+//! Central area pages: what's open is decided by `Route` (see `navigation`).
+//! Each page is a separate file with `impl PlayerApp`; here — page selection, the title
+//! with "breadcrumbs" and search, and what's shared between pages.
 
 mod album;
 mod albums;
@@ -25,13 +25,13 @@ use crate::ui::{
     style::theme::{TEXT, TEXT_FAINT},
 };
 
-/// Скругление картинок в сетке
+/// Image rounding in the grid
 pub(crate) const TILE_RADIUS: u8 = 8;
 
-/// Имя исполнителя в шапке его профиля и название альбома на странице альбома
+/// Artist name in their profile header and album title on the album page
 pub(crate) const ARTIST_NAME_SIZE: f32 = 30.0;
 
-/// Текст по центру оставшегося места
+/// Text centered in the remaining space
 pub(crate) fn placeholder(ui: &Ui, text: &str) {
     ui.painter().text(
         ui.available_rect_before_wrap().center(),
@@ -43,7 +43,7 @@ pub(crate) fn placeholder(ui: &Ui, text: &str) {
 }
 
 impl PlayerApp {
-    /// Открытая страница медиатеки (`self.route`) во всю центральную область
+    /// The open library page (`self.route`) across the whole central area
     pub(crate) fn render_library_view(&mut self, ui: &mut Ui) {
         egui::Frame::new()
             .inner_margin(16.0)
@@ -62,8 +62,8 @@ impl PlayerApp {
         }
     }
 
-    /// Заголовок страницы. Внутри исполнителя или альбома — «хлебные крошки», каждая ведёт
-    /// на свой уровень: «Albums › Альбом», «Artists › Исполнитель › Альбом»
+    /// Page title. Inside an artist or album — "breadcrumbs", each leading
+    /// to its level: "Albums › Album", "Artists › Artist › Album"
     pub(crate) fn render_breadcrumbs(&mut self, ui: &mut Ui) {
         let section = self.route.section();
         let title = section.title();
@@ -90,7 +90,7 @@ impl PlayerApp {
                     .unwrap_or_default();
                 components::breadcrumb_title(ui, &[title], &name).map(|_| Route::Playlists)
             }
-            // Верхний уровень раздела — с полем поиска справа. В пустой медиатеке искать нечего
+            // The section's top level — with a search field on the right. In an empty library there's nothing to search
             Route::Artists | Route::Albums | Route::Songs
                 if !self.core.library.tracks().is_empty() =>
             {
@@ -111,8 +111,8 @@ impl PlayerApp {
         }
     }
 
-    /// Заголовок вида слева и поле поиска справа. У Songs рядом с заголовком — число треков,
-    /// как «Playlist · N tracks»; во время поиска — сколько найдено: «· 3 of 120 tracks»
+    /// View title on the left and search field on the right. In Songs, next to the title — the track count,
+    /// like "Queue · N tracks"; during search — how many found: "· 3 of 120 tracks"
     pub(crate) fn render_title_with_search(&mut self, ui: &mut Ui, section: Section) {
         let note = (section == Section::Songs).then(|| {
             self.refresh_found_songs();
@@ -141,8 +141,8 @@ impl PlayerApp {
                 components::block_title(ui, section.title(), Align::LEFT, TEXT);
             }
         });
-        // Выделение сеток сбрасывается само — запрос входит в их scope. Список Songs
-        // показывает другие треки — его выделение ни на что не указывает
+        // Grid selections reset by themselves — the query is part of their scope. The Songs list
+        // shows other tracks — its selection points to nothing
         if changed && section == Section::Songs {
             self.library_view.clear_selection();
         }

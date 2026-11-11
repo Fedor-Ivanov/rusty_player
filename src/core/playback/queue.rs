@@ -1,18 +1,18 @@
-//! Список треков: порядок воспроизведения, shuffle, повтор, удаление.
+//! Track list: playback order, shuffle, repeat, removal.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 use crate::core::library::Track;
 
-/// Режим повтора: включён может быть только один
+/// Repeat mode: only one can be on
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Default)]
 pub enum RepeatMode {
     #[default]
     Off,
-    /// Текущий трек по кругу
+    /// The current track on loop
     One,
-    /// Весь список по кругу
+    /// The whole list on loop
     All,
 }
 
@@ -20,22 +20,22 @@ pub enum RepeatMode {
 pub struct TrackList {
     pub tracks: Vec<Track>,
     pub current_index: Option<usize>,
-    /// Случайный порядок воспроизведения
+    /// Shuffled playback order
     pub shuffle: bool,
     pub repeat: RepeatMode,
-    /// Номер сохранённого плейлиста, с которым связана очередь: её сохранили в него или
-    /// запустили из него. «Сохранить» тогда перезаписывает этот плейлист. Сбрасывается,
-    /// когда очередь заменяют другим содержимым или очищают. В старых файлах поля нет
+    /// Id of the saved playlist the queue is linked to: it was saved into it or
+    /// started from it. "Save" then overwrites this playlist. Reset
+    /// when the queue is replaced with other content or cleared. Old files lack the field
     #[serde(default)]
     pub playlist: Option<u64>,
-    /// Порядок воспроизведения при `shuffle`: перестановка индексов `tracks`.
-    /// Без `shuffle` треки идут по порядку, и этот список не используется
+    /// Playback order with `shuffle`: a permutation of `tracks` indices.
+    /// Without `shuffle` tracks go in order, and this list is unused
     #[serde(skip)]
     pub(super) shuffle_order: Vec<usize>,
 }
 
 impl TrackList {
-    /// Порядок, в котором играют треки: перемешанный или обычный
+    /// The order tracks play in: shuffled or normal
     pub(super) fn play_order(&self) -> Vec<usize> {
         if self.shuffle {
             self.shuffle_order.clone()
@@ -44,8 +44,8 @@ impl TrackList {
         }
     }
 
-    /// Трек, который идёт после текущего (`step` = 1) или перед ним (`step` = -1).
-    /// На краю списка с `wrap` переходит на другой конец, без него — `None`.
+    /// The track after the current one (`step` = 1) or before it (`step` = -1).
+    /// At the list edge, with `wrap` goes to the other end, without it — `None`.
     pub(super) fn neighbor(&self, step: isize, wrap: bool) -> Option<usize> {
         let order = self.play_order();
         let len = order.len() as isize;
@@ -68,8 +68,8 @@ impl TrackList {
         }
     }
 
-    /// Перемешивает порядок заново. Текущий трек ставится первым, чтобы после
-    /// включения shuffle сыграли все остальные, прежде чем он повторится
+    /// Reshuffles the order. The current track is put first, so that after
+    /// enabling shuffle all others play before it repeats
     pub(super) fn reshuffle(&mut self) {
         let mut rest: Vec<usize> = (0..self.tracks.len())
             .filter(|&index| Some(index) != self.current_index)
@@ -78,11 +78,11 @@ impl TrackList {
         self.shuffle_order = self.current_index.into_iter().chain(rest).collect();
     }
 
-    /// Удаляет треки с номерами `indices`. Номера остальных сдвигаются, поэтому
-    /// текущий трек и перемешанный порядок пересчитываются под новые номера.
-    /// Если удалён текущий трек, `current_index` становится `None`.
+    /// Removes tracks with indices `indices`. The others' indices shift, so
+    /// the current track and the shuffled order are recomputed for the new indices.
+    /// If the current track is removed, `current_index` becomes `None`.
     pub(super) fn remove(&mut self, indices: &BTreeSet<usize>) {
-        // Новый номер каждого трека; `None` — трек удаляется
+        // New index of each track; `None` — the track is removed
         let mut next = 0;
         let remap: Vec<Option<usize>> = (0..self.tracks.len())
             .map(|old| {
@@ -145,9 +145,9 @@ mod tests {
         list.remove(&BTreeSet::from([0, 2]));
 
         assert_eq!(titles(&list), ["1", "3", "4"]);
-        // Трек «3» был на месте 3, перед ним удалили два — теперь он на месте 1
+        // Track "3" was at position 3, two before it were removed — now it's at position 1
         assert_eq!(list.current_index, Some(1));
-        // Старый порядок 3, 0, 4, 1, 2 без удалённых 0 и 2 — в новых номерах
+        // Old order 3, 0, 4, 1, 2 without the removed 0 and 2 — in new indices
         assert_eq!(list.shuffle_order, [1, 2, 0]);
     }
 

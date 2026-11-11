@@ -1,6 +1,6 @@
-//! Тексты песен: из файла `.lrc` рядом с треком, из тегов или из LRCLIB (см. `finder`).
-//! Синхронизированный текст (формат LRC: строки с метками времени `[01:23.45]`) знает,
-//! какая строка поётся сейчас; обычный — просто строки.
+//! Lyrics: from an `.lrc` file next to the track, from tags or from LRCLIB (see `finder`).
+//! Synced lyrics (LRC format: lines with timestamps `[01:23.45]`) know
+//! which line is being sung now; plain lyrics are just lines.
 
 pub mod finder;
 pub mod lrclib;
@@ -14,27 +14,27 @@ use crate::core::library::metadata::fix_cp1251;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Lyrics {
-    /// По времени, если текст синхронизирован; иначе — по порядку в тексте
+    /// By time if the lyrics are synced; otherwise in text order
     pub lines: Vec<LyricLine>,
-    /// У строк есть время: можно подсвечивать текущую
+    /// Lines have times: the current one can be highlighted
     pub synced: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LyricLine {
-    /// Когда строка начинается, в миллисекундах; `None` у несинхронизированного текста
+    /// When the line starts, in milliseconds; `None` for unsynced lyrics
     pub start_ms: Option<u64>,
     pub text: String,
 }
 
 impl Lyrics {
-    /// Строка, которая поётся на `position_ms`: последняя из начавшихся. `None` — текст
-    /// не синхронизирован или первая строка ещё не началась
+    /// The line being sung at `position_ms`: the last one that has started. `None` — the lyrics
+    /// are not synced or the first line hasn't started yet
     pub fn current_line(&self, position_ms: u64) -> Option<usize> {
         if !self.synced {
             return None;
         }
-        // Строки отсортированы по времени: число начавшихся — номер следующей
+        // Lines are sorted by time: the number of started lines is the index of the next one
         let started = self
             .lines
             .partition_point(|line| line.start_ms.is_some_and(|start| start <= position_ms));
@@ -42,9 +42,9 @@ impl Lyrics {
     }
 }
 
-/// Текст песни трека `path`. Сначала — файл `.lrc` с тем же именем в той же папке
-/// (так хранят скачанные тексты), затем — тексты в тегах. Синхронизированный
-/// предпочитается обычному. `None` — текста нигде нет
+/// Lyrics for track `path`. First — an `.lrc` file with the same name in the same folder
+/// (that's how downloaded lyrics are stored), then — lyrics in tags. Synced
+/// is preferred over plain. `None` — no lyrics anywhere
 pub fn load_lyrics(path: &Path) -> Option<Lyrics> {
     let mut candidates = Vec::new();
     if let Some(text) = read_lrc_file(&path.with_extension("lrc")) {
@@ -70,7 +70,7 @@ pub fn load_lyrics(path: &Path) -> Option<Lyrics> {
         .cloned()
 }
 
-/// Файл `.lrc`: обычно UTF-8, но старые бывают в Windows-1251
+/// `.lrc` file: usually UTF-8, but old ones may be in Windows-1251
 fn read_lrc_file(path: &Path) -> Option<String> {
     let bytes = fs::read(path).ok()?;
     let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
@@ -80,21 +80,21 @@ fn read_lrc_file(path: &Path) -> Option<String> {
     })
 }
 
-/// Разбирает текст песни. Есть строки с метками времени — синхронизированный (LRC),
-/// иначе — обычный. Пустой текст — `None`
+/// Parses lyrics. If there are lines with timestamps — synced (LRC),
+/// otherwise — plain. Empty text — `None`
 pub fn parse_lyrics(text: &str) -> Option<Lyrics> {
     let mut offset_ms: i64 = 0;
     let mut timed: Vec<LyricLine> = Vec::new();
     let mut plain: Vec<String> = Vec::new();
 
-    // Строки разделяют по-разному: \n, \r\n и одиночным \r (старый формат Mac — так бывает
-    // в тегах MP3). `lines` знает только первые два
+    // Lines are separated differently: \n, \r\n and a lone \r (old Mac format — happens
+    // in MP3 tags). `lines` knows only the first two
     let text = text.replace("\r\n", "\n").replace('\r', "\n");
     for raw in text.lines() {
         let line = raw.trim();
         let (times, rest) = split_timestamps(line);
         if times.is_empty() {
-            // Служебные строки LRC: [ar:…], [ti:…], [offset:…] — не текст
+            // LRC metadata lines: [ar:…], [ti:…], [offset:…] — not lyrics
             if let Some(tag) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']'))
                 && let Some((name, value)) = tag.split_once(':')
                 && name.chars().all(|c| c.is_ascii_alphabetic())
@@ -108,7 +108,7 @@ pub fn parse_lyrics(text: &str) -> Option<Lyrics> {
             continue;
         }
         let text = strip_word_timestamps(rest);
-        // Повторяющийся припев пишут одной строкой с несколькими метками
+        // A repeated chorus is written as one line with several timestamps
         for start in times {
             timed.push(LyricLine {
                 start_ms: Some(start),
@@ -118,7 +118,7 @@ pub fn parse_lyrics(text: &str) -> Option<Lyrics> {
     }
 
     if !timed.is_empty() {
-        // Положительный offset — текст должен появляться раньше
+        // A positive offset means the lyrics should appear earlier
         for line in &mut timed {
             line.start_ms = line
                 .start_ms
@@ -131,7 +131,7 @@ pub fn parse_lyrics(text: &str) -> Option<Lyrics> {
         });
     }
 
-    // Обычный текст — без пустых строк по краям
+    // Plain lyrics — without blank lines at the edges
     let first = plain.iter().position(|line| !line.is_empty())?;
     let last = plain.iter().rposition(|line| !line.is_empty())?;
     Some(Lyrics {
@@ -146,7 +146,7 @@ pub fn parse_lyrics(text: &str) -> Option<Lyrics> {
     })
 }
 
-/// Метки времени в начале строки (`[01:23.45][02:10.00]текст`) и остаток строки
+/// Timestamps at the start of a line (`[01:23.45][02:10.00]text`) and the rest of the line
 fn split_timestamps(mut line: &str) -> (Vec<u64>, &str) {
     let mut times = Vec::new();
     while let Some(rest) = line.strip_prefix('[') {
@@ -162,7 +162,7 @@ fn split_timestamps(mut line: &str) -> (Vec<u64>, &str) {
     (times, line.trim())
 }
 
-/// `mm:ss`, `mm:ss.xx`, `mm:ss.xxx` или `mm:ss:xx` — в миллисекунды
+/// `mm:ss`, `mm:ss.xx`, `mm:ss.xxx` or `mm:ss:xx` — to milliseconds
 fn parse_timestamp(stamp: &str) -> Option<u64> {
     let (minutes, rest) = stamp.split_once(':')?;
     let minutes: u64 = minutes.trim().parse().ok()?;
@@ -174,7 +174,7 @@ fn parse_timestamp(stamp: &str) -> Option<u64> {
     if seconds >= 60 {
         return None;
     }
-    // Дробь — доли секунды: «4» — 400 мс, «45» — 450, «456» — 456
+    // The fraction is fractions of a second: "4" — 400 ms, "45" — 450, "456" — 456
     let fraction_ms = if fraction.is_empty() {
         0
     } else {
@@ -185,7 +185,7 @@ fn parse_timestamp(stamp: &str) -> Option<u64> {
     Some((minutes * 60 + seconds) * 1000 + fraction_ms)
 }
 
-/// Убирает метки отдельных слов расширенного LRC: `<01:23.45>`
+/// Removes per-word timestamps of enhanced LRC: `<01:23.45>`
 fn strip_word_timestamps(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -201,7 +201,7 @@ fn strip_word_timestamps(text: &str) -> String {
         rest = &rest[start + end + 1..];
     }
     out.push_str(rest);
-    // После удаления меток между словами остаются двойные пробелы
+    // After removing timestamps, double spaces remain between words
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
@@ -252,7 +252,7 @@ mod tests {
         assert_eq!(lyrics.current_line(10_000), None);
         assert_eq!(parse_lyrics("  \n "), None);
 
-        // Строки через одиночный \r и через \r\n — те же строки
+        // Lines split by a lone \r and by \r\n are the same lines
         for text in ["First line\r\rSecond line", "First line\r\n\r\nSecond line"] {
             let lyrics = parse_lyrics(text).unwrap();
             assert_eq!(

@@ -1,5 +1,5 @@
-//! Добавление треков: кнопка «+» с меню, выбор файлов и папки, очередь фоновых
-//! добавлений, прогресс. Каждое добавление знает, куда идут треки: в библиотеку или очередь.
+//! Adding tracks: the "+" button with a menu, picking files and a folder, the queue of background
+//! adds, progress. Each add knows where the tracks go: to the library or the queue.
 
 use eframe::egui::{self, Rect, Ui, pos2, vec2};
 use std::{
@@ -22,31 +22,31 @@ use crate::{
     },
 };
 
-// Фоновое добавление: как часто проверять готовность, через сколько показывать прогресс
-// (быстрое добавление обходится без него) и сколько минимум его держать, чтобы не мелькал
+// Background adding: how often to check readiness, after how long to show progress
+// (a quick add does without it) and the minimum time to keep it so it doesn't flicker
 const LOADER_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const LOADER_SHOW_DELAY: Duration = Duration::from_millis(400);
 const LOADER_MIN_VISIBLE: Duration = Duration::from_millis(500);
 
-/// Куда идут добавленные треки
+/// Where added tracks go
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Destination {
-    /// Сохраняются между запусками
+    /// Kept between launches
     Library,
-    /// Только послушать сейчас, в библиотеку не попадают
+    /// Just to listen now, they don't go into the library
     Queue,
-    /// Перечитать теги треков, уже лежащих в библиотеке (после смены формата)
+    /// Re-read the tags of tracks already in the library (after a format change)
     LibraryRefresh,
 }
 
-/// Фоновое добавление в очереди
+/// A queued background add
 pub(crate) struct PendingLoad {
     pub(crate) loader: Loader,
     destination: Destination,
 }
 
 impl PendingLoad {
-    /// Текст плашки прогресса с `{done}` и `{total}` — зависит от того, что делаем
+    /// Progress banner text with `{done}` and `{total}` — depends on what we're doing
     pub(crate) fn progress_template(&self) -> &'static str {
         match self.destination {
             Destination::Library | Destination::Queue => t().adding_progress,
@@ -56,7 +56,7 @@ impl PendingLoad {
 }
 
 impl PlayerApp {
-    /// Кнопка «+» у правого края строки заголовка `row` с меню «Add files» / «Add folder»
+    /// The "+" button at the right edge of title row `row` with the "Add files" / "Add folder" menu
     pub(crate) fn render_add_button(&mut self, ui: &mut Ui, row: Rect, destination: Destination) {
         let add_rect = Rect::from_center_size(
             pos2(row.right() - ADD_BUTTON_SIZE / 2.0, row.center().y),
@@ -71,8 +71,8 @@ impl PlayerApp {
             components::icon_button(ui, add_rect, components::HitShape::Circle, id_salt, true);
         paint_add(ui, add_rect, add.hover);
 
-        // Меню под «+», выровнено по его правому краю. Открывается и закрывается
-        // по нашему `clicked` — он учитывает только клики внутри круга
+        // Menu under "+", aligned to its right edge. Opens and closes
+        // on our `clicked` — it counts only clicks inside the circle
         egui::Popup::menu(&add.response)
             .open_memory(add.clicked.then_some(egui::SetOpenCommand::Toggle))
             .align(egui::RectAlign::BOTTOM_END)
@@ -88,19 +88,19 @@ impl PlayerApp {
             });
     }
 
-    /// Выбор отдельных файлов
+    /// Picking individual files
     pub(crate) fn add_files(&mut self, destination: Destination) {
         let Some(paths) = rfd::FileDialog::new()
             .add_filter(t().audio_files, SUPPORTED_EXTENSIONS)
             .pick_files()
         else {
-            // Пользователь закрыл диалог: оставляем текущий трек
+            // The user closed the dialog: keep the current track
             return;
         };
         self.start_loading(Source::Files(paths), destination);
     }
 
-    /// Выбор папки: добавляются все аудиофайлы в ней, включая вложенные папки
+    /// Picking a folder: all audio files in it are added, including subfolders
     pub(crate) fn add_folder(&mut self, destination: Destination) {
         let Some(dir) = rfd::FileDialog::new().pick_folder() else {
             return;
@@ -108,8 +108,8 @@ impl PlayerApp {
         self.start_loading(Source::Folder(dir), destination);
     }
 
-    /// Перетащенные файлы и папки: файлы — одним добавлением (неподдерживаемые, например
-    /// картинки, пропускаются), каждая папка — своим, со всеми аудиофайлами внутри
+    /// Dropped files and folders: files — as one add (unsupported ones, e.g.
+    /// images, are skipped), each folder — as its own, with all audio files inside
     pub(crate) fn add_paths(&mut self, paths: Vec<PathBuf>, destination: Destination) {
         let (folders, files): (Vec<PathBuf>, Vec<PathBuf>) =
             paths.into_iter().partition(|path| path.is_dir());
@@ -134,8 +134,8 @@ impl PlayerApp {
     }
 
     pub(crate) fn start_loading(&mut self, source: Source, destination: Destination) {
-        // Что уже есть в библиотеке, второй раз не читаем: повторное добавление
-        // той же папки добавит только новые файлы
+        // What's already in the library isn't read a second time: adding the same
+        // folder again adds only new files
         let skip = match destination {
             Destination::Library => self.core.library.paths().clone(),
             Destination::Queue | Destination::LibraryRefresh => HashSet::new(),
@@ -146,20 +146,20 @@ impl PlayerApp {
         });
     }
 
-    /// Забирает готовые треки у фонового добавления. Вызывается каждый кадр
+    /// Takes ready tracks from the background add. Called every frame
     pub(crate) fn poll_loaders(&mut self, ctx: &egui::Context) {
         let Some(pending) = self.loaders.front_mut() else {
             return;
         };
         pending.loader.update();
 
-        // Прогресс показываем, только если добавление затянулось: несколько файлов
-        // добавляются быстрее, и тогда прогресс не мелькает вовсе
+        // Progress is shown only if adding takes a while: a few files
+        // are added faster, and then the progress doesn't flicker at all
         if self.loader_shown_at.is_none() && pending.loader.elapsed() >= LOADER_SHOW_DELAY {
             self.loader_shown_at = Some(Instant::now());
         }
-        // Уже показанный прогресс держим не меньше LOADER_MIN_VISIBLE — иначе он мог бы
-        // появиться и сразу исчезнуть, это выглядит хуже, чем не показывать его вовсе
+        // Progress already shown is kept for at least LOADER_MIN_VISIBLE — otherwise it could
+        // appear and vanish right away, which looks worse than not showing it at all
         let can_hide = self
             .loader_shown_at
             .is_none_or(|shown_at| shown_at.elapsed() >= LOADER_MIN_VISIBLE);
@@ -175,17 +175,17 @@ impl PlayerApp {
             }
         }
 
-        // Пока идёт добавление, кадры нужны и без действий пользователя:
-        // иначе прогресс обновлялся бы только при движении мыши
+        // While adding is in progress, frames are needed even without user actions:
+        // otherwise the progress would update only when the mouse moves
         if !self.loaders.is_empty() {
             ctx.request_repaint_after(LOADER_POLL_INTERVAL);
         }
     }
 
-    /// Кладёт добавленные треки по назначению — все разом
+    /// Puts the added tracks where they belong — all at once
     pub(crate) fn apply_loaded(&mut self, finished: Finished, destination: Destination) {
-        // Обновление библиотеки: файлы, которые не удалось прочитать, просто остаются
-        // как были (пропавшие и так помечены) — ошибки не показываем
+        // Library refresh: files that couldn't be read just stay
+        // as they were (missing ones are marked anyway) — errors aren't shown
         if destination == Destination::LibraryRefresh {
             self.core.library.refresh(finished.tracks);
             return;
@@ -200,11 +200,11 @@ impl PlayerApp {
                     let result = self.core.controller.add_tracks(finished.tracks);
                     self.report_error(result);
                 }
-                Destination::LibraryRefresh => unreachable!("обработано выше"),
+                Destination::LibraryRefresh => unreachable!("handled above"),
             }
         }
 
-        // Всё найденное уже было в библиотеке — это не ошибка, просто нечего добавлять
+        // Everything found was already in the library — not an error, just nothing to add
         if finished.total == Some(0) && finished.skipped == 0 {
             self.error = Some(t().no_audio_found.into());
         } else if !finished.errors.is_empty() {
@@ -212,15 +212,15 @@ impl PlayerApp {
         }
     }
 
-    /// Отменяет текущее добавление: уже прочитанные треки не добавляются
+    /// Cancels the current add: already read tracks are not added
     pub(crate) fn cancel_loading(&mut self) {
         self.loaders.pop_front();
         self.loader_shown_at = None;
     }
 }
 
-/// Текст ошибки добавления: первые несколько файлов и сколько ещё не добавилось —
-/// при тысячах файлов полный список не поместился бы на экран
+/// Adding error text: the first few files and how many more weren't added —
+/// with thousands of files the full list wouldn't fit on screen
 fn summarize_errors(errors: &[String]) -> String {
     const SHOWN: usize = 3;
     let mut text = errors[..errors.len().min(SHOWN)].join("\n");

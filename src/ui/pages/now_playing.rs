@@ -1,5 +1,5 @@
-//! Центральная область: информация о текущем треке и обложка, без треков — «Open files»;
-//! плашка текущего трека, пока открыт вид библиотеки.
+//! Central area: current track info and cover, without tracks — "Open files";
+//! the current track bar while a library view is open.
 
 use eframe::egui::{
     self, Align, Align2, CursorIcon, FontId, Label, Layout, Rect, RichText, ScrollArea, Sense,
@@ -27,29 +27,29 @@ use crate::{
 use std::path::PathBuf;
 
 const COVER_MAX_SIZE: f32 = 320.0;
-/// Размер текста деталей трека
+/// Track details text size
 const DETAILS_SIZE: f32 = 16.0;
 const COVER_RADIUS: u8 = 12;
-/// Текст песни: размер строк и зазор между ними
+/// Lyrics: line size and the gap between lines
 const LYRICS_SIZE: f32 = 20.0;
 const LYRICS_LINE_GAP: f32 = 10.0;
-/// Отступ текста песни от деталей трека над ним — больше, чем у обложки: строки текста
-/// иначе сливаются с деталями
+/// Lyrics offset from the track details above — larger than the cover's: otherwise lyrics lines
+/// blend into the details
 const LYRICS_TOP_GAP: f32 = 16.0;
-/// На столько текст песни выезжает снизу, появляясь вместо обложки
+/// How far the lyrics slide up from below when appearing instead of the cover
 const LYRICS_SLIDE: f32 = 12.0;
-/// Наименьший зазор между названием трека и кнопкой текста песни справа от него
+/// Minimum gap between the track title and the lyrics button to its right
 const LYRICS_BUTTON_GAP: f32 = 8.0;
-/// Фон начинает растворяться на столько выше низа центральной области
+/// The backdrop starts dissolving this far above the bottom of the central area
 const BACKDROP_FADE_ABOVE: f32 = 120.0;
 
 impl PlayerApp {
-    /// Кнопка по центру всего оставшегося места
+    /// A button centered in all the remaining space
     pub(crate) fn render_add_tracks_block(&mut self, ui: &mut Ui) {
         let text = RichText::new(t().open_files).size(18.0).color(TEXT);
 
-        // Layout в egui не центрирует по вертикали, поэтому считаем размер кнопки
-        // заранее и ставим её в центр свободной области сами
+        // Layout in egui doesn't center vertically, so we compute the button size
+        // in advance and place it in the center of the free area ourselves
         let text_size = egui::WidgetText::from(text.clone())
             .into_galley(
                 ui,
@@ -73,11 +73,11 @@ impl PlayerApp {
         }
     }
 
-    /// Фон деталей текущего трека — его размытая обложка — под центральной областью `ui`
-    /// и ниже, под панелью управления до низа окна. Внизу центральной области начинает
-    /// растворяться и к низу окна исчезает: без резкой границы с панелью управления.
-    /// При смене трека прежний фон плавно сменяется новым (см. `CoverFade`). Возвращает
-    /// фигуру: её кладут под панели (см. `ui`), а не поверх них
+    /// Current track details backdrop — its blurred cover — under the central area `ui`
+    /// and below, under the controls panel down to the bottom of the window. At the bottom of the central area it starts
+    /// dissolving and vanishes by the bottom of the window: no sharp border with the controls panel.
+    /// On track change the old backdrop smoothly changes to the new one (see `CoverFade`). Returns
+    /// a shape: it's placed under the panels (see `ui`), not on top of them
     pub(crate) fn track_backdrop(&mut self, ui: &Ui) -> Option<Shape> {
         let track = self.core.controller.player().current_track.clone()?;
         let candidates = self.cover_candidates(&track);
@@ -92,8 +92,8 @@ impl PlayerApp {
             .backdrop(rect, content.bottom() - BACKDROP_FADE_ABOVE, progress)
     }
 
-    /// Где искать обложку трека: сначала в нём самом (у треков сборника картинки бывают
-    /// разные), потом в остальных треках его альбома — обложка бывает не у всех
+    /// Where to look for the track's cover: first in the track itself (compilation tracks may have
+    /// different images), then in the other tracks of its album — not all have a cover
     pub(crate) fn cover_candidates(&mut self, track: &Track) -> Vec<PathBuf> {
         let mut candidates = vec![track.path.clone()];
         if let Some(album) = self.core.album_of(track) {
@@ -102,16 +102,16 @@ impl PlayerApp {
         candidates
     }
 
-    /// Детали текущего трека: название, исполнитель и альбом (ссылки — если они есть
-    /// в библиотеке), год и жанр, длительность и битрейт; ниже — обложка по центру
-    /// свободного места
+    /// Current track details: title, artist and album (links — if they're
+    /// in the library), year and genre, duration and bitrate; below — the cover centered
+    /// in the free space
     pub(crate) fn render_current_track_info(&mut self, ui: &mut Ui) {
         let Some(track) = self.core.controller.player().current_track.clone() else {
             return;
         };
-        // Исполнитель и альбом трека в библиотеке — ищутся так же, как при группировке
+        // The track's artist and album in the library — looked up the same way as in grouping
         let album_in_library = self.core.album_of(&track).map(AlbumKey::of);
-        // Ссылка ведёт к исполнителю альбома: «Angèle; Kiddy Smile» — к Angèle
+        // The link leads to the album artist: "Angèle; Kiddy Smile" — to Angèle
         let artist_key = groups::album_artist(&track).to_lowercase();
         let artist_in_library = self
             .core
@@ -122,8 +122,8 @@ impl PlayerApp {
             .map(|artist| artist.name.clone());
         let cover_candidates = self.cover_candidates(&track);
         let details = self.current_details(&track);
-        // «2006 · Instrumental Rock» — что из этого есть. Год — из файла, а если файл
-        // не прочитался — из медиатеки
+        // "2006 · Instrumental Rock" — whichever of these exists. The year — from the file, and if the file
+        // couldn't be read — from the library
         let year = details
             .as_ref()
             .and_then(|details| details.year)
@@ -134,7 +134,7 @@ impl PlayerApp {
             .into_iter()
             .chain(genre.filter(|genre| !genre.is_empty()).map(str::to_owned))
             .collect();
-        // «4:02 · 320 kbps»
+        // "4:02 · 320 kbps"
         let mut length = format_secs(track.duration_secs as f32);
         if let Some(kbps) = details.as_ref().and_then(|details| details.bitrate_kbps) {
             length += " · ";
@@ -146,8 +146,8 @@ impl PlayerApp {
         let mut seek_to = None;
         let mut toggle_lyrics = false;
         ui.vertical(|ui| {
-            // Название — слева, переносится, не заходя под кнопку текста песни справа.
-            // Кнопка — по центру первой строки названия
+            // The title — on the left, wrapping without going under the lyrics button on the right.
+            // The button — centered on the first line of the title
             let full_width = ui.available_width();
             let title = ui
                 .scope(|ui| {
@@ -176,7 +176,7 @@ impl PlayerApp {
                             .on_hover_text(t().show_artist)
                             .clicked();
                 } else {
-                    // Не из медиатеки — тот же вид, только без перехода
+                    // Not from the library — the same look, just without navigation
                     components::text_line(ui, &track.artist, DETAILS_SIZE, TEXT_MUTED);
                 }
             }
@@ -195,8 +195,8 @@ impl PlayerApp {
             components::text_line(ui, &length, DETAILS_SIZE, TEXT_MUTED);
             ui.add_space(8.0);
 
-            // Ниже — всё оставшееся место: текст песни или обложка. При переключении они
-            // плавно сменяют друг друга, текст при этом чуть выезжает снизу
+            // Below — all the remaining space: lyrics or the cover. When toggled they
+            // smoothly replace each other, and the lyrics slide up slightly from below
             let free = ui.available_rect_before_wrap();
             ui.allocate_rect(free, Sense::hover());
             let lyrics_shown = ui.ctx().animate_bool_with_time_and_easing(
@@ -217,10 +217,10 @@ impl PlayerApp {
             if lyrics_shown < 1.0 {
                 ui.scope(|ui| {
                     ui.multiply_opacity(1.0 - lyrics_shown);
-                    // Обложка — по центру, по ширине и по высоте; на небольшом окне
-                    // уменьшается, чтобы помещаться
+                    // The cover — centered horizontally and vertically; in a small window
+                    // it shrinks to fit
                     let side = free.width().min(free.height()).clamp(0.0, COVER_MAX_SIZE);
-                    // Пока обложка нового трека читается, видна прежняя — см. `CoverFade`
+                    // While the new track's cover is being read, the old one is visible — see `CoverFade`
                     let cover = self.covers.get(&cover_candidates, CoverSize::Large);
                     let progress = self.cover_fade.update(ui, cover);
                     self.cover_fade.paint(
@@ -246,9 +246,9 @@ impl PlayerApp {
         }
     }
 
-    /// Текст песни в `area`. Синхронизированный: текущая строка светлее остальных, текст
-    /// прокручивается за ней, клик по строке перематывает к ней — тогда возвращает, куда
-    /// (в секундах). Обычный — просто текст. Нет текста — заглушка
+    /// Lyrics in `area`. Synced: the current line is brighter than the rest, the lyrics
+    /// scroll to follow it, clicking a line seeks to it — then returns where to
+    /// (in seconds). Plain — just text. No lyrics — a placeholder
     fn render_lyrics(&mut self, ui: &mut Ui, area: Rect, track: &Track) -> Option<f32> {
         let area = area.with_min_y(area.top() + LYRICS_TOP_GAP);
         if !matches!(&self.current_lyrics, Some((path, _)) if *path == track.path) {
@@ -288,14 +288,14 @@ impl PlayerApp {
                 .max_rect(area)
                 .layout(Layout::top_down(Align::Min)),
         );
-        // У каждого трека своя прокрутка: новый текст начинается сверху
+        // Each track has its own scroll: new lyrics start at the top
         ScrollArea::vertical()
             .id_salt(("lyrics", &track.path))
             .auto_shrink(false)
             .show(&mut child, |ui| {
                 for (index, line) in lyrics.lines.iter().enumerate() {
-                    // Пустая строка: в синхронизированном тексте — проигрыш, в обычном —
-                    // промежуток между куплетами
+                    // An empty line: in synced lyrics — an instrumental break, in plain ones —
+                    // a gap between verses
                     if line.text.is_empty() && !lyrics.synced {
                         ui.add_space(LYRICS_SIZE);
                         continue;
@@ -305,8 +305,8 @@ impl PlayerApp {
                     } else {
                         &line.text
                     };
-                    // Синхронизированный: поётся сейчас — яркая, остальные — бледные, чтобы
-                    // текущая была видна сразу и на светлом фоне обложки
+                    // Synced: the line being sung is bright, the rest are pale, so
+                    // the current one is visible at once even on a light cover backdrop
                     let color = if !lyrics.synced || current == Some(index) {
                         TEXT
                     } else {
@@ -329,7 +329,7 @@ impl PlayerApp {
                     }
                     ui.add_space(LYRICS_LINE_GAP);
                 }
-                // Запас снизу: последние строки тоже доходят до середины
+                // Bottom padding: the last lines also reach the middle
                 if lyrics.synced {
                     ui.add_space(area.height() / 2.0);
                 }
@@ -337,7 +337,7 @@ impl PlayerApp {
         seek_to
     }
 
-    /// Теги файла текущего трека: читаются, только когда трек сменился
+    /// Current track file tags: read only when the track changed
     fn current_details(&mut self, track: &Track) -> Option<FileMetadata> {
         match &self.current_details {
             Some((path, details)) if *path == track.path => details.clone(),
@@ -349,7 +349,7 @@ impl PlayerApp {
         }
     }
 
-    /// Плашка текущего трека внизу центральной области. Возвращает `true`, если по ней кликнули
+    /// The current track bar at the bottom of the central area. Returns `true` if it was clicked
     pub(crate) fn render_now_playing_bar(&mut self, ui: &mut Ui) -> bool {
         let Some(track) = &self.core.controller.player().current_track else {
             return false;

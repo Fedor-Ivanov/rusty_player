@@ -1,4 +1,4 @@
-//! Поле поиска в заголовке вида библиотеки.
+//! Search field in the library view header.
 
 use eframe::egui::{
     self, Align, Align2, CornerRadius, FontId, Id, Key, Layout, Margin, Rect, RichText, Sense,
@@ -12,24 +12,24 @@ use crate::ui::{
     style::theme::{HIGHLIGHT, HIGHLIGHT_STRONG, HOVER_FADE_SECS, TEXT, TEXT_FAINT, TEXT_MUTED},
 };
 
-/// Ширина поля; в узкой области — не больше `SEARCH_MAX_SHARE` ширины строки
+/// Field width; in a narrow area — no more than `SEARCH_MAX_SHARE` of the row width
 const SEARCH_WIDTH: f32 = 220.0;
 const SEARCH_MAX_SHARE: f32 = 0.5;
-/// Высота поля — чуть больше строки заголовка
+/// Field height — slightly more than the title row
 const SEARCH_HEIGHT: f32 = 26.0;
-/// Наименьший зазор между заголовком и полем
+/// Minimum gap between the title and the field
 const SEARCH_GAP: f32 = 12.0;
 const SEARCH_TEXT_SIZE: f32 = 13.0;
 const ICON_SIZE: f32 = 14.0;
-/// Отступ иконок от краёв поля
+/// Icon padding from the field edges
 const ICON_INSET: f32 = 8.0;
 const CLEAR_SIZE: f32 = 14.0;
 
-/// Строка заголовка с полем поиска у правого края — как `justify-content: space-between`.
-/// `title` рисует заголовок в оставшейся слева ширине (`block_title`, `block_title_with_note`).
-/// Высота строки — как у заголовка без поиска: поле выходит за строку поровну сверху и снизу,
-/// и при переходе к «хлебным крошкам» ничего не сдвигается.
-/// Возвращает `true`, если запрос изменился
+/// A title row with a search field at the right edge — like `justify-content: space-between`.
+/// `title` draws the title in the remaining width on the left (`block_title`, `block_title_with_note`).
+/// The row height is the same as a title without search: the field extends beyond the row equally above and below,
+/// and nothing shifts when switching to "breadcrumbs".
+/// Returns `true` if the query changed
 pub fn title_with_search(
     ui: &mut Ui,
     id_salt: &str,
@@ -56,14 +56,14 @@ pub fn title_with_search(
     search_field(ui, field, id_salt, query)
 }
 
-/// Поле поиска в `rect`: лупа слева, подсказка «Search» (на языке интерфейса), крестик очистки справа, пока
-/// запрос не пуст. Esc очищает запрос. Возвращает `true`, если запрос изменился
+/// Search field in `rect`: a magnifier on the left, a "Search" hint (in the UI language), a clear cross on the right while
+/// the query is not empty. Esc clears the query. Returns `true` if the query changed
 fn search_field(ui: &mut Ui, rect: Rect, id_salt: &str, query: &mut String) -> bool {
     let text_id = Id::unique(("search", id_salt));
     let radius = CornerRadius::same((rect.height() / 2.0) as u8);
 
-    // Клик по полю мимо текста (по лупе, по краям) тоже ставит курсор в поле.
-    // Фон добавлен раньше текста — клики по тексту достаются тексту
+    // A click on the field outside the text (on the magnifier, at the edges) also focuses the field.
+    // The background is added before the text — clicks on the text go to the text
     let background = ui.interact(rect, text_id.with("background"), Sense::click());
     if background.clicked() {
         ui.memory_mut(|memory| memory.request_focus(text_id));
@@ -109,7 +109,7 @@ fn search_field(ui: &mut Ui, rect: Rect, id_salt: &str, query: &mut String) -> b
         pos2(clear.left() - 4.0, rect.bottom()),
     );
 
-    // Отдельный дочерний Ui: поле не занимает места в раскладке заголовка
+    // A separate child Ui: the field takes no space in the title layout
     let mut child = ui.new_child(
         UiBuilder::new()
             .max_rect(text_rect)
@@ -128,7 +128,7 @@ fn search_field(ui: &mut Ui, rect: Rect, id_salt: &str, query: &mut String) -> b
     );
     let mut changed = response.changed();
 
-    // Esc снимает фокус с поля (так делает сам TextEdit) — и очищает запрос, как в macOS
+    // Esc removes focus from the field (TextEdit does that itself) — and clears the query, like in macOS
     if response.lost_focus() && ui.input(|i| i.key_pressed(Key::Escape)) && !query.is_empty() {
         query.clear();
         changed = true;

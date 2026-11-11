@@ -1,14 +1,14 @@
-//! Интерфейс на egui.
+//! UI built with egui.
 //!
-//! - `app` — `PlayerApp`: состояние окна и раскладка панелей;
-//! - `action` — действия пользователя с данными и единственное место, где они выполняются;
-//! - `navigation` — что открыто в центре (`Route`);
-//! - `panels` — всегда на экране: медиатека, плейлист, плеер;
-//! - `pages` — страницы центральной области;
-//! - `dialogs` — модальные окна;
-//! - `components` — переиспользуемые элементы, ничего не знают о плеере;
-//! - `style` — цвета, иконки, стекло окна; `i18n` — переводы;
-//! - `loading` — добавление файлов; `covers` — кэш обложек.
+//! - `app` — `PlayerApp`: window state and panel layout;
+//! - `action` — user actions on data and the only place where they are performed;
+//! - `navigation` — what's open in the center (`Route`);
+//! - `panels` — always on screen: library, queue, player;
+//! - `pages` — central area pages;
+//! - `dialogs` — modal windows;
+//! - `components` — reusable elements, know nothing about the player;
+//! - `style` — colors, icons, window glass; `i18n` — translations;
+//! - `loading` — adding files; `covers` — cover cache.
 
 mod action;
 mod app;

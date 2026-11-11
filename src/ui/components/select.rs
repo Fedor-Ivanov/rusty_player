@@ -1,4 +1,4 @@
-//! Выпадающий список.
+//! Dropdown list.
 
 use eframe::egui::{self, Align2, CursorIcon, FontId, RectAlign, Sense, Stroke, Ui, pos2, vec2};
 
@@ -8,11 +8,11 @@ use crate::ui::style::theme::{HIGHLIGHT, HIGHLIGHT_STRONG, HOVER_FADE_SECS, TEXT
 const SELECT_SIZE: egui::Vec2 = vec2(160.0, 32.0);
 const SELECT_PADDING: f32 = 12.0;
 const SELECT_TEXT_SIZE: f32 = 14.0;
-/// Стрелка вниз у правого края: полуширина и полувысота «галочки»
+/// Down arrow at the right edge: half-width and half-height of the "chevron"
 const CHEVRON_HALF_SIZE: egui::Vec2 = vec2(4.0, 2.0);
 
-/// Выпадающий список: плашка с выбранным вариантом и стрелкой, по клику — меню всех
-/// вариантов `options` (значение и подпись). Возвращает вариант, если выбрали другой
+/// Dropdown: a box with the selected option and an arrow; on click — a menu of all
+/// `options` (value and label). Returns the option if a different one was chosen
 pub fn select<T: Copy + PartialEq>(ui: &mut Ui, current: T, options: &[(T, &str)]) -> Option<T> {
     let (rect, response) = ui.allocate_exact_size(SELECT_SIZE, Sense::click());
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
@@ -50,7 +50,7 @@ pub fn select<T: Copy + PartialEq>(ui: &mut Ui, current: T, options: &[(T, &str)
         Stroke::new(1.5, TEXT_MUTED),
     );
 
-    // Меню под плашкой, той же ширины
+    // Menu under the box, of the same width
     let mut chosen = None;
     egui::Popup::menu(&response)
         .align(RectAlign::BOTTOM_START)

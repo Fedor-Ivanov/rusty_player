@@ -1,4 +1,4 @@
-//! Группировка треков библиотеки по исполнителям и альбомам — для видов «Artists» и «Albums».
+//! Grouping library tracks by artists and albums — for the "Artists" and "Albums" views.
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -7,9 +7,9 @@ use super::Track;
 pub const UNKNOWN_ARTIST: &str = "Unknown Artist";
 pub const UNKNOWN_ALBUM: &str = "Unknown Album";
 
-/// Исполнитель альбома трека — по нему треки собираются в альбомы и исполнителей. Тег
-/// Album Artist, а если его нет — основной исполнитель трека (см. `primary_artist`): треки
-/// с приглашёнными артистами («Angèle; Kiddy Smile») не отрываются от своего альбома
+/// A track's album artist — tracks are grouped into albums and artists by it. The
+/// Album Artist tag, or if missing — the track's primary artist (see `primary_artist`): tracks
+/// with featured artists ("Angèle; Kiddy Smile") are not torn away from their album
 pub fn album_artist(track: &Track) -> String {
     let tagged = track.album_artist.trim();
     let artist = if tagged.is_empty() {
@@ -25,20 +25,20 @@ pub fn album_artist(track: &Track) -> String {
     .to_owned()
 }
 
-/// У трека настоящий альбом: в тегах есть и название альбома, и исполнитель. Без них трек
-/// попадает в «Unknown Album» вместе со всеми такими же — общего у этих треков нет, и
-/// брать у такого «альбома» обложку для трека нельзя: она будет чужой
+/// The track has a real album: the tags have both the album title and the artist. Without them the track
+/// goes into "Unknown Album" together with all similar ones — these tracks have nothing in common, and
+/// taking a cover from such an "album" for a track is wrong: it would belong to someone else
 pub fn has_known_album(track: &Track) -> bool {
     !track.album.trim().is_empty() && album_artist(track) != UNKNOWN_ARTIST
 }
 
-/// Основной исполнитель из поля исполнителя: до «;» (так пишут нескольких исполнителей)
-/// и до «feat.», «ft.», «featuring». Запятая и «&» не разделители — они бывают в именах:
-/// «Earth, Wind & Fire», «Simon & Garfunkel»
+/// Primary artist from the artist field: up to ";" (how multiple artists are written)
+/// and up to "feat.", "ft.", "featuring". Comma and "&" are not separators — they occur in names:
+/// "Earth, Wind & Fire", "Simon & Garfunkel"
 fn primary_artist(artist: &str) -> &str {
     const MARKERS: [&str; 6] = [" feat.", " feat ", " ft.", " ft ", " featuring ", "(feat"];
-    // Разделители — ASCII: в строке с ASCII-нижним регистром у них те же позиции, что
-    // в исходной
+    // Separators are ASCII: in the ASCII-lowercased string they are at the same positions as
+    // in the original
     let lower = artist.to_ascii_lowercase();
     let end = MARKERS
         .iter()
@@ -51,28 +51,28 @@ fn primary_artist(artist: &str) -> &str {
 
 pub struct ArtistGroup {
     pub name: String,
-    /// Номера треков в библиотеке
+    /// Track indices in the library
     pub tracks: Vec<usize>,
 }
 
 pub struct AlbumGroup {
     pub title: String,
     pub artist: String,
-    /// Самый ранний год среди треков альбома
+    /// The earliest year among the album's tracks
     pub year: Option<u16>,
-    /// Файлы, в тегах которых искать обложку альбома, — все его треки в порядке альбома.
-    /// Обложка лежит в тегах каждого файла отдельно и бывает не у всех: берётся первая
-    /// найденная. У «Unknown …» (треки без альбома или исполнителя в тегах, см.
-    /// `has_known_album`) пусто: обложка одного из таких треков — не обложка остальных,
-    /// вместо неё заглушка
+    /// Files whose tags to search for the album cover — all its tracks in album order.
+    /// The cover is stored in each file's tags separately and not all have it: the first one
+    /// found is used. "Unknown …" (tracks without album or artist in tags, see
+    /// `has_known_album`) has none: one of these tracks' cover is not the cover of the others,
+    /// a placeholder is used instead
     pub cover_candidates: Vec<PathBuf>,
-    /// Номера треков в библиотеке — в порядке альбома: по номеру диска и трека
+    /// Track indices in the library — in album order: by disc and track number
     pub tracks: Vec<usize>,
 }
 
-/// Исполнители и альбомы библиотеки, по алфавиту без учёта регистра.
-/// Альбом — это пара «название + исполнитель»: одноимённые альбомы разных исполнителей
-/// не сливаются в один
+/// Library artists and albums, alphabetically, case-insensitive.
+/// An album is a "title + artist" pair: same-named albums by different artists
+/// are not merged into one
 pub fn group(tracks: &[Track]) -> (Vec<ArtistGroup>, Vec<AlbumGroup>) {
     let name_or = |text: &str, unknown: &str| {
         let text = text.trim();
@@ -113,8 +113,8 @@ pub fn group(tracks: &[Track]) -> (Vec<ArtistGroup>, Vec<AlbumGroup>) {
     let mut artists: Vec<ArtistGroup> = artists.into_values().collect();
     artists.sort_by_cached_key(|a| a.name.to_lowercase());
     let mut albums: Vec<AlbumGroup> = albums.into_values().collect();
-    // Треки альбома — по номеру диска, затем по номеру трека. Без номера — в конце диска,
-    // в порядке библиотеки; без номера диска считаем первым диском
+    // Album tracks — by disc number, then by track number. Without a number — at the end of the disc,
+    // in library order; without a disc number, treated as the first disc
     for album in &mut albums {
         album.tracks.sort_by_key(|&index| {
             let track = &tracks[index];
@@ -124,7 +124,7 @@ pub fn group(tracks: &[Track]) -> (Vec<ArtistGroup>, Vec<AlbumGroup>) {
                 index,
             )
         });
-        // Треки альбома одинаковы по названию альбома и исполнителю — хватает первого
+        // Album tracks share the album title and artist — the first one is enough
         let known = album
             .tracks
             .first()
@@ -171,9 +171,9 @@ mod tests {
             .iter()
             .map(|&i| tracks[i].title.as_str())
             .collect();
-        // Без номера диска — первый диск; без номера трека — в конце своего диска
+        // No disc number — first disc; no track number — at the end of its disc
         assert_eq!(order, ["d1-1", "d1-2", "no number", "d2-1"]);
-        // Обложку альбома ищут в его треках в том же порядке
+        // The album cover is searched in its tracks in the same order
         let covers: Vec<_> = albums[0]
             .cover_candidates
             .iter()
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn only_tagged_albums_are_known() {
         assert!(has_known_album(&track("a", "Band", "Album", None)));
-        // Без альбома или без исполнителя — «Unknown …»: обложку у такого не берём
+        // No album or no artist — "Unknown …": no cover is taken from it
         assert!(!has_known_album(&track("b", "Band", " ", None)));
         assert!(!has_known_album(&track("c", "", "Album", None)));
         assert!(!has_known_album(&track("d", "", "", None)));
@@ -215,7 +215,7 @@ mod tests {
             track("2", "Angèle; Romeo Elvis", "Brol", Some(2018)),
             track("3", "Tricky Feat. Anthony Kiedis", "Blowback", Some(2001)),
             track("4", "Earth, Wind & Fire", "Gratitude", None),
-            // Тег Album Artist важнее исполнителя трека
+            // The Album Artist tag takes precedence over the track artist
             Track {
                 album_artist: "Various Artists".into(),
                 ..track("5", "Muse", "Hits", None)
@@ -260,7 +260,7 @@ mod tests {
         let (artists, albums) = group(&tracks);
 
         let names: Vec<_> = artists.iter().map(|a| a.name.as_str()).collect();
-        // Регистр не различается, имя — как у первого встреченного трека
+        // Case-insensitive, the name is taken from the first track encountered
         assert_eq!(names, ["Adele", "Björk", "Muse", UNKNOWN_ARTIST]);
         assert_eq!(artists[2].tracks, [0, 1]);
 
@@ -272,10 +272,10 @@ mod tests {
             albums,
             [
                 ("21", "Adele", None, 1),
-                // Одноимённые альбомы разных исполнителей — разные альбомы
+                // Same-named albums by different artists are different albums
                 ("Greatest Hits", "Adele", Some(2015), 1),
                 ("Greatest Hits", "Björk", Some(2002), 1),
-                // Год альбома — самый ранний из его треков
+                // The album year is the earliest of its tracks
                 ("Origin of Symmetry", "Muse", Some(2001), 2),
                 (UNKNOWN_ALBUM, UNKNOWN_ARTIST, None, 1),
             ]
@@ -301,7 +301,7 @@ mod tests {
                 )
             })
             .collect();
-        // Треки без тегов — в одном «альбоме», но обложку у него не ищем: заглушка
+        // Untagged tracks are in one "album", but no cover is searched for it: placeholder
         assert_eq!(
             covers,
             [

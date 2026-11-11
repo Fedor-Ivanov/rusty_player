@@ -1,4 +1,4 @@
-//! Кнопки-иконки с точной областью нажатия и плавным наведением.
+//! Icon buttons with an exact hit area and smooth hover.
 
 use eframe::egui::{self, Align2, CursorIcon, FontId, Pos2, Rect, Response, Sense, Ui, vec2};
 
@@ -12,21 +12,21 @@ const PILL_HEIGHT: f32 = 32.0;
 const PILL_PADDING: f32 = 18.0;
 const PILL_TEXT_SIZE: f32 = 14.0;
 
-/// Форма области, в которой кнопка реагирует на курсор
+/// Shape of the area where the button reacts to the cursor
 pub enum HitShape {
     Rect,
-    /// Круг, вписанный в прямоугольник кнопки
+    /// A circle inscribed in the button rectangle
     Circle,
 }
 
 pub struct IconButton {
     pub response: Response,
     pub clicked: bool,
-    /// Плавный hover для отрисовки: 0.0 — без наведения, 1.0 — наведено
+    /// Smooth hover for drawing: 0.0 — not hovered, 1.0 — hovered
     pub hover: f32,
 }
 
-/// Кнопка-иконка: клик, курсор-рука и плавный hover — только внутри `shape`
+/// Icon button: click, hand cursor and smooth hover — only inside `shape`
 pub fn icon_button(
     ui: &mut Ui,
     rect: Rect,
@@ -41,7 +41,7 @@ pub fn icon_button(
     };
     let response = ui.interact(rect, ui.scope_id().with(id_salt), sense);
 
-    // egui проверяет попадание по прямоугольнику, круг уточняем сами
+    // egui hit-tests by rectangle, we refine the circle ourselves
     let inside = |pos: Pos2| match shape {
         HitShape::Rect => true,
         HitShape::Circle => pos.distance(rect.center()) <= rect.width() / 2.0,
@@ -66,8 +66,8 @@ pub fn icon_button(
     }
 }
 
-/// Кнопка-переключатель в панели списка. Возвращает клик и плавные (0.0..=1.0)
-/// значения включения и наведения для отрисовки иконки.
+/// Toggle button in the list panel. Returns the click and smooth (0.0..=1.0)
+/// on and hover values for drawing the icon.
 pub fn toggle_button(
     ui: &mut Ui,
     rect: Rect,
@@ -87,18 +87,18 @@ pub fn toggle_button(
     (clicked, active, button.hover)
 }
 
-/// Вид кнопки-«пилюли»
+/// "Pill" button style
 #[derive(Clone, Copy)]
 pub enum ButtonStyle {
-    /// Главное действие: светлая заливка и тёмный текст
+    /// Primary action: light fill and dark text
     Primary,
-    /// Полупрозрачная
+    /// Translucent
     Secondary,
-    /// Действие, которое что-то удаляет: красная
+    /// An action that deletes something: red
     Destructive,
 }
 
-/// Кнопка-«пилюля» с текстом. При наведении плавно меняет яркость
+/// A "pill" button with text. Smoothly changes brightness on hover
 pub fn pill_button(ui: &mut Ui, label: &str, style: ButtonStyle) -> Response {
     let font = FontId::proportional(PILL_TEXT_SIZE);
     let text_width = ui
@@ -118,12 +118,12 @@ pub fn pill_button(ui: &mut Ui, label: &str, style: ButtonStyle) -> Response {
         egui::emath::easing::cubic_out,
     );
     let (fill, text) = match style {
-        // Светлая кнопка при наведении чуть темнеет
+        // A light button darkens slightly on hover
         ButtonStyle::Primary => (
             PRIMARY_BUTTON_FILL.lerp_to_gamma(PRIMARY_BUTTON_HOVER, hover),
             PRIMARY_BUTTON_TEXT,
         ),
-        // Полупрозрачная — при наведении светлеет
+        // Translucent — lightens on hover
         ButtonStyle::Secondary => (
             HIGHLIGHT_STRONG.lerp_to_gamma(SECONDARY_BUTTON_HOVER, hover),
             TEXT,

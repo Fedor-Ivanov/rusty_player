@@ -1,6 +1,6 @@
-//! Файлы на диске: описание трека, теги, поиск аудиофайлов, фоновое добавление,
-//! библиотека — сохранённый между запусками список треков.
-//! Ничего не знает ни о воспроизведении, ни об интерфейсе.
+//! Files on disk: track description, tags, audio file discovery, background adding,
+//! the library — the track list kept between launches.
+//! Knows nothing about playback or the UI.
 
 pub mod groups;
 pub mod loader;

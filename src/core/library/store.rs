@@ -1,8 +1,8 @@
-//! Библиотека — треки, которые пользователь добавил «насовсем». Хранится между запусками
-//! списком путей и тегов в JSON в папке данных приложения; сами файлы остаются на своих местах.
+//! The library — tracks the user added "for good". Kept between launches
+//! as a list of paths and tags in JSON in the app data folder; the files themselves stay where they are.
 //!
-//! Медиатека бывает огромной, поэтому медленное — в фоне: сохранение (файл переписывается
-//! целиком) и проверка, какие файлы пропали с диска (по запросу к диску на трек).
+//! The library can be huge, so slow work happens in the background: saving (the file is rewritten
+//! entirely) and checking which files vanished from disk (one disk query per track).
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -19,9 +19,9 @@ use super::Track;
 use crate::core::storage::BackgroundWriter;
 
 const FILE_NAME: &str = "library.json";
-/// Версия формата файла. 2 — в треках появился год, 3 — номера трека и диска,
-/// 4 — исполнитель альбома: библиотеку старой версии нужно один раз перечитать из тегов
-/// (см. `outdated_paths`)
+/// File format version. 2 — tracks got a year, 3 — track and disc numbers,
+/// 4 — album artist: an old-version library has to be re-read from tags once
+/// (see `outdated_paths`)
 const FORMAT_VERSION: u32 = 4;
 
 #[derive(Deserialize)]
@@ -30,7 +30,7 @@ struct Stored {
     tracks: Vec<Track>,
 }
 
-/// То же, что `Stored`, для записи: треки — общим списком, без копии на каждое сохранение
+/// Same as `Stored`, for writing: tracks as a shared list, without a copy for every save
 #[derive(Serialize)]
 struct Snapshot {
     version: u32,
@@ -38,30 +38,30 @@ struct Snapshot {
 }
 
 pub struct Library {
-    /// Общий с фоновой записью: она держит снимок, пока пишет. Изменение во время записи
-    /// копирует список (`Arc::make_mut`), иначе копии нет
+    /// Shared with the background writer: it holds a snapshot while writing. A change during writing
+    /// copies the list (`Arc::make_mut`), otherwise there's no copy
     tracks: Arc<Vec<Track>>,
-    /// Пути всех треков — чтобы не добавить один файл дважды
+    /// Paths of all tracks — so the same file isn't added twice
     paths: HashSet<PathBuf>,
-    /// Файлы, которых не оказалось на диске при загрузке: их переместили или удалили.
-    /// Заполняется фоновой проверкой (`check_missing_in_background`); до неё пусто
+    /// Files that weren't on disk at load time: they were moved or deleted.
+    /// Filled by the background check (`check_missing_in_background`); empty until then
     missing: HashSet<PathBuf>,
-    /// Ответ фоновой проверки пропавших файлов, пока он не пришёл
+    /// The background missing-files check's answer, until it arrives
     missing_check: Option<Receiver<HashSet<PathBuf>>>,
-    /// Фоновая запись в файл библиотеки; `None` — папка данных недоступна, библиотека
-    /// живёт только до выхода
+    /// Background writing to the library file; `None` — the data folder is unavailable, the library
+    /// lives only until exit
     writer: Option<BackgroundWriter<Snapshot>>,
-    /// Версия формата, с которой сохранять. Пока старая библиотека не перечитана из тегов,
-    /// сохраняется со старой версией — иначе после перезапуска её бы сочли обновлённой
+    /// Format version to save with. Until an old library is re-read from tags,
+    /// it is saved with the old version — otherwise after a restart it would be considered updated
     version: u32,
-    /// Растёт при каждом изменении: по нему видно, что производные данные (группы по
-    /// исполнителям и альбомам) пора пересчитать
+    /// Grows on every change: it shows that derived data (groups by
+    /// artists and albums) needs to be recomputed
     revision: u64,
 }
 
 impl Library {
-    /// Загружает библиотеку из папки данных `dir`. Файла нет — пустая библиотека.
-    /// Вторым значением — ошибка для показа пользователю, если что-то пошло не так.
+    /// Loads the library from data folder `dir`. No file — an empty library.
+    /// The second value is an error to show the user if something went wrong.
     pub fn load(dir: Option<PathBuf>) -> (Self, Option<String>) {
         let file = dir.map(|dir| dir.join(FILE_NAME));
         let mut library = Self {
@@ -84,15 +84,15 @@ impl Library {
 
         let text = match fs::read_to_string(file) {
             Ok(text) => text,
-            // Первый запуск: библиотеки ещё нет
+            // First launch: no library yet
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (library, None),
             Err(e) => return (library, Some(format!("Could not read the library: {e}"))),
         };
         let stored: Stored = match serde_json::from_str(&text) {
             Ok(stored) => stored,
             Err(e) => {
-                // Повреждённый файл не перезаписываем пустым при первом же изменении:
-                // откладываем его в сторону, чтобы его можно было восстановить
+                // Don't overwrite a corrupted file with an empty one on the first change:
+                // move it aside so it can be recovered
                 let backup = file.with_extension("json.bak");
                 let _ = fs::rename(file, &backup);
                 return (
@@ -115,9 +115,9 @@ impl Library {
         &self.tracks
     }
 
-    /// Проверяет в фоне, каких файлов нет на диске: на огромной медиатеке это секунды,
-    /// и запуск их не ждёт. Пока ответа нет, все треки считаются на месте. `wake` будит
-    /// приложение, когда ответ готов (см. `poll_missing`)
+    /// Checks in the background which files are missing from disk: on a huge library this takes seconds,
+    /// and startup doesn't wait for it. Until the answer arrives, all tracks are considered present. `wake` wakes
+    /// the app when the answer is ready (see `poll_missing`)
     pub fn check_missing_in_background(&mut self, wake: impl Fn() + Send + 'static) {
         let paths: Vec<PathBuf> = self.tracks.iter().map(|t| t.path.clone()).collect();
         let (sender, receiver) = mpsc::channel();
@@ -129,8 +129,8 @@ impl Library {
         });
     }
 
-    /// Забирает ответ фоновой проверки, если он пришёл. `true` — пометки пропавших
-    /// файлов обновились
+    /// Takes the background check's answer if it arrived. `true` — the missing-file
+    /// marks were updated
     pub fn poll_missing(&mut self) -> bool {
         let Some(receiver) = &self.missing_check else {
             return false;
@@ -139,7 +139,7 @@ impl Library {
             return false;
         };
         self.missing_check = None;
-        // Пока проверяли, треки могли убрать из медиатеки — их не помечаем
+        // Tracks may have been removed from the library during the check — don't mark them
         self.missing = missing
             .into_iter()
             .filter(|path| self.paths.contains(path))
@@ -147,12 +147,12 @@ impl Library {
         true
     }
 
-    /// Ошибка фоновой записи, если была, — для показа пользователю
+    /// Background writing error, if any — to show the user
     pub fn take_save_error(&self) -> Option<String> {
         self.writer.as_ref().and_then(BackgroundWriter::take_error)
     }
 
-    /// Ждёт, пока сохранится всё изменённое: перед выходом
+    /// Waits until all changes are saved: before exit
     pub fn flush(&self) {
         if let Some(writer) = &self.writer {
             writer.flush();
@@ -163,15 +163,15 @@ impl Library {
         self.revision
     }
 
-    /// Библиотека сохранена старой версией и в ней не хватает данных из тегов — пути всех
-    /// её треков, чтобы перечитать их. `None` — библиотека актуальна
+    /// The library was saved by an old version and lacks data from tags — paths of all
+    /// its tracks, to re-read them. `None` — the library is up to date
     pub fn outdated_paths(&self) -> Option<Vec<PathBuf>> {
         (self.version < FORMAT_VERSION && !self.tracks.is_empty())
             .then(|| self.tracks.iter().map(|t| t.path.clone()).collect())
     }
 
-    /// Заменяет данные треков на перечитанные из тегов (по пути) и сохраняет библиотеку уже
-    /// новой версией. Треки, которых нет в `fresh` (файл пропал), остаются как были
+    /// Replaces track data with data re-read from tags (by path) and saves the library with
+    /// the new version. Tracks missing from `fresh` (file vanished) stay as they were
     pub fn refresh(&mut self, fresh: Vec<Track>) {
         let mut fresh: std::collections::HashMap<PathBuf, Track> =
             fresh.into_iter().map(|t| (t.path.clone(), t)).collect();
@@ -185,19 +185,19 @@ impl Library {
         self.save();
     }
 
-    /// Пути, которые уже есть в библиотеке: при повторном добавлении папки их не читаем заново
+    /// Paths already in the library: when a folder is added again they are not re-read
     pub fn paths(&self) -> &HashSet<PathBuf> {
         &self.paths
     }
 
-    /// Файла трека не было на диске при загрузке (по фоновой проверке)
+    /// The track file wasn't on disk at load time (per the background check)
     pub fn is_missing(&self, index: usize) -> bool {
         self.tracks
             .get(index)
             .is_some_and(|track| self.missing.contains(&track.path))
     }
 
-    /// Добавляет треки в конец, пропуская те, что уже есть, и сохраняет библиотеку
+    /// Appends tracks, skipping those already present, and saves the library
     pub fn add(&mut self, tracks: Vec<Track>) {
         let new: Vec<Track> = tracks
             .into_iter()
@@ -214,8 +214,8 @@ impl Library {
         self.save();
     }
 
-    /// Треки с номерами `indices` для воспроизведения — без тех, чьих файлов нет на диске:
-    /// сыграть их всё равно не выйдет
+    /// Tracks with indices `indices` for playback — without those whose files are missing from disk:
+    /// they couldn't be played anyway
     pub fn playable_tracks(&self, indices: &[usize]) -> Vec<Track> {
         indices
             .iter()
@@ -224,8 +224,8 @@ impl Library {
             .collect()
     }
 
-    /// Пути треков с номерами `indices`. Удаление спрашивает подтверждение по путям, а не
-    /// по номерам: пока ждём ответа, номера могут измениться, а пути — нет
+    /// Paths of tracks with indices `indices`. Removal asks for confirmation by paths, not
+    /// by indices: while waiting for the answer, indices may change, but paths won't
     pub fn paths_of(&self, indices: &[usize]) -> HashSet<PathBuf> {
         indices
             .iter()
@@ -234,8 +234,8 @@ impl Library {
             .collect()
     }
 
-    /// Номера треков файлов `paths` — в порядке библиотеки. Файлов, которых в ней нет,
-    /// в ответе нет
+    /// Indices of the tracks of files `paths` — in library order. Files not in the library
+    /// are not in the answer
     pub fn indices_of(&self, paths: &HashSet<PathBuf>) -> Vec<usize> {
         self.tracks
             .iter()
@@ -245,13 +245,13 @@ impl Library {
             .collect()
     }
 
-    /// Удаляет треки файлов `paths` (сами файлы не трогает) и сохраняет библиотеку
+    /// Removes the tracks of files `paths` (doesn't touch the files themselves) and saves the library
     pub fn remove_paths(&mut self, paths: &HashSet<PathBuf>) {
         let indices = self.indices_of(paths).into_iter().collect();
         self.remove(&indices);
     }
 
-    /// Удаляет треки с номерами `indices` (сами файлы не трогает) и сохраняет библиотеку
+    /// Removes tracks with indices `indices` (doesn't touch the files themselves) and saves the library
     pub fn remove(&mut self, indices: &BTreeSet<usize>) {
         let mut index = 0;
         let (paths, missing) = (&mut self.paths, &mut self.missing);
@@ -268,7 +268,7 @@ impl Library {
         self.save();
     }
 
-    /// Отправляет библиотеку на запись в фоне. Ошибка придёт позже — `take_save_error`
+    /// Sends the library to be written in the background. An error comes later — `take_save_error`
     fn save(&self) {
         if let Some(writer) = &self.writer {
             writer.write(Snapshot {
@@ -316,7 +316,7 @@ mod tests {
         let (mut library, error) = Library::load(Some(dir.clone()));
         assert!(error.is_none());
         library.add(vec![track(&a), track(&b)]);
-        // Повторное добавление того же файла пропускается
+        // Adding the same file again is skipped
         library.add(vec![track(&b), track(&c)]);
         assert_eq!(titles(&library), ["a", "b", "c"]);
 
@@ -324,8 +324,8 @@ mod tests {
         library.flush();
         fs::remove_file(&c).unwrap();
 
-        // После перезапуска — то же содержимое, а пропавший файл помечен — когда закончится
-        // фоновая проверка
+        // After a restart — the same contents, and the vanished file is marked — once the
+        // background check finishes
         let (mut library, error) = Library::load(Some(dir.clone()));
         assert!(error.is_none());
         assert_eq!(titles(&library), ["b", "c"]);
@@ -346,7 +346,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("lmp_v1_{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("a.mp3");
-        // Библиотека в формате 1: у трека нет года
+        // A format 1 library: the track has no year
         fs::write(
             dir.join("library.json"),
             format!(
@@ -361,7 +361,7 @@ mod tests {
         assert_eq!(library.tracks()[0].year, None);
         assert_eq!(library.outdated_paths(), Some(vec![path.clone()]));
 
-        // Добавление до обновления не должно пометить библиотеку обновлённой
+        // Adding before the update must not mark the library as updated
         library.add(vec![track(&dir.join("b.mp3"))]);
         library.flush();
         let (mut library, _) = Library::load(Some(dir.clone()));

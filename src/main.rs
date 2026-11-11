@@ -1,5 +1,5 @@
-// В релизной сборке под Windows не открываем консольное окно рядом с приложением.
-// В отладочной консоль остаётся — в неё пишутся ошибки
+// In a Windows release build, don't open a console window next to the app.
+// In a debug build the console stays — errors are written to it
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod core;
@@ -7,12 +7,12 @@ mod ui;
 
 use eframe::egui;
 
-/// Имя приложения: заголовок окна и имя папки с данными (библиотекой)
+/// App name: window title and the name of the data (library) folder
 pub const APP_NAME: &str = "LMP";
 
 fn main() -> eframe::Result {
-    // Иконка вшивается в бинарник при сборке, отдельный файл рядом не нужен.
-    // На macOS — сквиркл по шаблону Apple, иначе — пластинка на прозрачном фоне
+    // The icon is embedded into the binary at build time, no separate file is needed.
+    // On macOS — a squircle following Apple's template, otherwise — a vinyl record on a transparent background
     #[cfg(target_os = "macos")]
     const ICON_PNG: &[u8] = include_bytes!("../assets/images/icon_macos.png");
     #[cfg(not(target_os = "macos"))]
@@ -21,12 +21,12 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            // Стартовые ширины: библиотека 240 + центр + список треков 300 — центру остаётся ~440
+            // Initial widths: library 240 + center + track list 300 — the center gets ~440
             .with_inner_size([980.0, 620.0])
-            // Минимумы: боковые панели по 180 + центральная область 260 = 620, плюс запас
+            // Minimums: side panels 180 each + central area 260 = 620, plus a margin
             .with_min_inner_size([640.0, 400.0])
             .with_icon(icon)
-            // Прозрачное окно: под ним система рисует настоящее размытие (см. window_glass.rs)
+            // Transparent window: the system draws a real blur under it (see window_glass.rs)
             .with_transparent(true),
         renderer: ui::style::window_glass::renderer(),
         ..Default::default()

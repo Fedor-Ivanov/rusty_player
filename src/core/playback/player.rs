@@ -1,4 +1,4 @@
-//! Управление воспроизведением: текущий трек, play/pause, переходы, связь с аудиопотоком.
+//! Playback control: current track, play/pause, transitions, link to the audio thread.
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -41,10 +41,10 @@ impl Default for Player {
     }
 }
 
-/// Громкость: положение ползунка и mute. Запоминается между запусками
+/// Volume: slider position and mute. Remembered between launches
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct Volume {
-    /// Положение ползунка: 0.0..=1.0
+    /// Slider position: 0.0..=1.0
     pub level: f32,
     pub muted: bool,
 }
@@ -59,30 +59,30 @@ impl Default for Volume {
 }
 
 impl Volume {
-    /// Громкость, которую слышно: 0.0, если звук выключен или ползунок в нуле
+    /// Audible volume: 0.0 if muted or the slider is at zero
     pub fn audible(self) -> f32 {
         if self.muted { 0.0 } else { self.level }
     }
 }
 
-/// Громкость, с которой включается звук, если ползунок стоял в нуле
+/// Volume to unmute to if the slider was at zero
 const UNMUTE_LEVEL: f32 = 0.5;
 
-/// Состояние плеера + связь с аудиопотоком. Аналог состояния и команд из Tauri-версии.
+/// Player state + link to the audio thread: commands go there, events (track finished) come back
 pub struct PlayerController {
     player: Player,
     audio: Sender<AudioCmd>,
     events: Receiver<AudioEvent>,
     position_ms: Arc<AtomicU64>,
     volume: Volume,
-    /// Растёт при каждом изменении плейлиста (треки, текущий трек, shuffle, повтор):
-    /// по нему видно, что плейлист пора сохранить
+    /// Grows on every queue change (tracks, current track, shuffle, repeat):
+    /// it shows the queue needs saving
     queue_revision: u64,
 }
 
 impl PlayerController {
-    /// `wake` вызывается из аудиопотока, когда для `poll_events` появилось событие
-    /// (трек доиграл): по нему нужно вызвать `poll_events`, не дожидаясь действий пользователя
+    /// `wake` is called from the audio thread when an event appears for `poll_events`
+    /// (a track finished): it should trigger `poll_events` without waiting for user actions
     pub fn new(wake: impl Fn() + Send + 'static) -> Self {
         let position_ms = Arc::new(AtomicU64::new(0));
         let (audio, events) = audio::spawn_audio_thread(position_ms.clone(), wake);
@@ -109,8 +109,8 @@ impl PlayerController {
         self.queue_revision
     }
 
-    /// Связывает очередь с сохранённым плейлистом `playlist` (или развязывает — `None`),
-    /// см. `TrackList::playlist`
+    /// Links the queue to saved playlist `playlist` (or unlinks — `None`),
+    /// see `TrackList::playlist`
     pub fn link_playlist(&mut self, playlist: Option<u64>) {
         if self.player.track_list.playlist != playlist {
             self.player.track_list.playlist = playlist;
@@ -122,20 +122,20 @@ impl PlayerController {
         self.volume
     }
 
-    /// Ставит громкость целиком — например, сохранённую с прошлого запуска
+    /// Sets the whole volume state — e.g. the one saved from the previous run
     pub fn set_volume(&mut self, volume: Volume) {
         self.volume = Volume {
             level: volume.level.clamp(0.0, 1.0),
             muted: volume.muted,
         };
-        // Слух воспринимает громкость примерно логарифмически: с квадратом ползунка
-        // середина звучит как середина, а не почти как максимум
+        // Hearing perceives loudness roughly logarithmically: with the slider squared
+        // the middle sounds like the middle, not almost like the maximum
         let gain = self.volume.audible().powi(2);
-        // Аудиопоток живёт, пока жив контроллер: отправка не может не дойти
+        // The audio thread lives as long as the controller: sending can't fail
         let _ = self.audio.send(AudioCmd::SetVolume(gain));
     }
 
-    /// Ползунок громкости: двигать его — значит и включить звук, если он был выключен
+    /// Volume slider: moving it also unmutes if muted
     pub fn set_volume_level(&mut self, level: f32) {
         self.set_volume(Volume {
             level,
@@ -143,8 +143,8 @@ impl PlayerController {
         });
     }
 
-    /// Кнопка mute. Включает звук, если он не слышен — выключен или ползунок в нуле
-    /// (тогда ползунок встаёт на середину); иначе выключает, запоминая положение ползунка
+    /// Mute button. Unmutes if the sound is inaudible — muted or the slider at zero
+    /// (then the slider moves to the middle); otherwise mutes, remembering the slider position
     pub fn toggle_mute(&mut self) {
         let volume = self.volume;
         self.set_volume(if volume.audible() == 0.0 {
@@ -164,8 +164,8 @@ impl PlayerController {
         });
     }
 
-    /// Обрабатывает события аудиопотока. Вызывать в начале каждого кадра.
-    /// Возвращает `true`, если трек доиграл до конца.
+    /// Handles audio thread events. Call at the start of every frame.
+    /// Returns `true` if the track played to the end.
     pub fn poll_events(&mut self) -> bool {
         let mut ended = false;
 
@@ -182,7 +182,7 @@ impl PlayerController {
     }
 
     pub fn seek(&self, position_ms: u64) -> Result<(), String> {
-        // Сразу, чтобы UI не показал старую позицию, пока аудиопоток не обработал команду
+        // Right away, so the UI doesn't show the old position until the audio thread handles the command
         self.position_ms.store(position_ms, Ordering::Relaxed);
 
         self.audio
@@ -190,9 +190,9 @@ impl PlayerController {
             .map_err(|e| e.to_string())
     }
 
-    /// Делает трек текущим. Воспроизведение не начинается — для этого есть `play`.
+    /// Makes the track current. Playback doesn't start — that's what `play` is for.
     fn set_current_track(&mut self, track: Track) -> Result<(), String> {
-        // Если что-то уже играло, останавливаем: выбран другой трек
+        // If something was already playing, stop it: another track is selected
         self.audio.send(AudioCmd::Stop).map_err(|e| e.to_string())?;
 
         self.position_ms.store(0, Ordering::Relaxed);
@@ -203,36 +203,36 @@ impl PlayerController {
         Ok(())
     }
 
-    /// Восстанавливает плейлист прошлого запуска: те же треки, режимы shuffle и повтора.
-    /// Текущий трек выбран, но не играет — как будто его только что выбрали
+    /// Restores the queue of the previous run: the same tracks, shuffle and repeat modes.
+    /// The current track is selected but not playing — as if it had just been selected
     pub fn restore_track_list(&mut self, mut list: TrackList) {
         list.current_index = list
             .current_index
             .filter(|&index| index < list.tracks.len());
         self.player.current_track = list.current_index.map(|index| list.tracks[index].clone());
         self.player.state = PlayerState::Stopped;
-        // Перемешанный порядок не сохраняется — перемешиваем заново
+        // The shuffled order isn't saved — shuffle again
         if list.shuffle {
             list.reshuffle();
         }
         self.player.track_list = list;
     }
 
-    /// Добавляет треки в конец списка. Текущий трек и воспроизведение не меняются.
+    /// Appends tracks to the list. The current track and playback don't change.
     pub fn append_tracks(&mut self, tracks: impl IntoIterator<Item = Track>) {
         let list = &mut self.player.track_list;
         let first_new = list.tracks.len();
         list.tracks.extend(tracks);
 
-        // Новые треки встают в случайном порядке в конец перемешанной очереди
+        // New tracks go in random order to the end of the shuffled queue
         let mut added: Vec<usize> = (first_new..list.tracks.len()).collect();
         fastrand::shuffle(&mut added);
         list.shuffle_order.extend(added);
         self.queue_revision += 1;
     }
 
-    /// Добавляет треки в конец плейлиста. Если ничего ещё не выбрано, текущим становится
-    /// первый из добавленных; иначе текущий трек не трогаем
+    /// Appends tracks to the queue. If nothing is selected yet, the first added one
+    /// becomes current; otherwise the current track is left alone
     pub fn add_tracks(&mut self, tracks: Vec<Track>) -> Result<(), String> {
         if tracks.is_empty() {
             return Ok(());
@@ -246,17 +246,17 @@ impl PlayerController {
         Ok(())
     }
 
-    /// Заменяет весь плейлист треками `tracks` и запускает воспроизведение с первого из них,
-    /// а при включённом shuffle — со случайного
+    /// Replaces the whole queue with `tracks` and starts playback from the first of them,
+    /// or, with shuffle on, from a random one
     pub fn play_all(&mut self, tracks: Vec<Track>) -> Result<(), String> {
         let list = &mut self.player.track_list;
         list.tracks = tracks;
         list.current_index = None;
-        // Очередь заменили другим содержимым — с прежним плейлистом она больше не связана
+        // The queue was replaced with other content — it's no longer linked to the previous playlist
         list.playlist = None;
         list.reshuffle();
         self.queue_revision += 1;
-        // Без текущего трека «следующий» — первый в порядке воспроизведения
+        // Without a current track, "next" is the first in playback order
         let Some(first) = list.neighbor(1, true) else {
             self.player.current_track = None;
             self.player.state = PlayerState::Stopped;
@@ -267,8 +267,8 @@ impl PlayerController {
         self.play()
     }
 
-    /// Удаляет треки из списка. Если среди них текущий, воспроизведение останавливается
-    /// и текущего трека больше нет — плеер как до выбора трека
+    /// Removes tracks from the list. If the current one is among them, playback stops
+    /// and there's no current track anymore — the player is as before a track was selected
     pub fn remove_tracks(&mut self, indices: &BTreeSet<usize>) -> Result<(), String> {
         let removes_current = self
             .player
@@ -287,14 +287,14 @@ impl PlayerController {
         Ok(())
     }
 
-    /// Очищает очередь: воспроизведение останавливается, текущего трека больше нет
+    /// Clears the queue: playback stops, there's no current track anymore
     pub fn clear(&mut self) -> Result<(), String> {
         let all = (0..self.player.track_list.tracks.len()).collect();
         self.link_playlist(None);
         self.remove_tracks(&all)
     }
 
-    /// Включает или выключает случайный порядок
+    /// Toggles shuffle
     pub fn toggle_shuffle(&mut self) {
         let list = &mut self.player.track_list;
         list.shuffle = !list.shuffle;
@@ -304,7 +304,7 @@ impl PlayerController {
         self.queue_revision += 1;
     }
 
-    /// Включает режим повтора; повторное нажатие на уже включённый — выключает
+    /// Turns on a repeat mode; pressing an already active one turns it off
     pub fn toggle_repeat(&mut self, mode: RepeatMode) {
         let list = &mut self.player.track_list;
         list.repeat = if list.repeat == mode {
@@ -315,7 +315,7 @@ impl PlayerController {
         self.queue_revision += 1;
     }
 
-    /// Делает текущим трек из списка по его позиции.
+    /// Makes a track from the list current by its position.
     pub fn select(&mut self, index: usize) -> Result<(), String> {
         let track = self
             .player
@@ -330,12 +330,12 @@ impl PlayerController {
         Ok(())
     }
 
-    /// Вызывается, когда трек доиграл. С повтором одного — запускает его снова,
-    /// иначе — следующий по порядку (с учётом shuffle). Если список закончился и повтор
-    /// всего списка выключен, делает текущим первый трек, но не запускает его.
+    /// Called when a track finishes. With repeat-one — starts it again,
+    /// otherwise — the next in order (respecting shuffle). If the list ended and repeat
+    /// all is off, makes the first track current but doesn't start it.
     pub fn play_next(&mut self) -> Result<(), String> {
-        // Текущий трек удалили из списка: «доиграл» мог прийти уже после остановки —
-        // само ничего не запускаем
+        // The current track was removed from the list: "finished" could arrive after stopping —
+        // don't start anything on our own
         if self.player.current_track.is_none() {
             return Ok(());
         }
@@ -359,8 +359,8 @@ impl PlayerController {
         }
     }
 
-    /// Кнопка «вперёд»: следующий трек (с учётом shuffle), после последнего — первый.
-    /// Если трек играл, новый тоже запускается.
+    /// "Next" button: the next track (respecting shuffle), after the last — the first.
+    /// If the track was playing, the new one starts too.
     pub fn skip_next(&mut self) -> Result<(), String> {
         match self.player.track_list.neighbor(1, true) {
             Some(next) => self.switch_to(next),
@@ -368,8 +368,8 @@ impl PlayerController {
         }
     }
 
-    /// Кнопка «назад»: если трек играет дольше нескольких секунд, возвращает в его
-    /// начало (как в большинстве плееров), иначе — предыдущий трек, перед первым — последний.
+    /// "Previous" button: if the track has been playing for more than a few seconds, rewinds to its
+    /// start (like most players), otherwise — the previous track, before the first — the last.
     pub fn skip_prev(&mut self) -> Result<(), String> {
         const RESTART_THRESHOLD_MS: u64 = 3000;
 
@@ -384,13 +384,16 @@ impl PlayerController {
         }
     }
 
-    /// Переключает на трек, сохраняя состояние: играло — играет и новый
+    /// Switches to a track, keeping the state: if it was playing, the new one plays too
     fn switch_to(&mut self, index: usize) -> Result<(), String> {
         let was_playing = self.player.state == PlayerState::Playing;
         self.select(index)?;
         if was_playing { self.play() } else { Ok(()) }
     }
 
+    /// Starts or resumes the current track. From a stop, plays from `position_ms` (after a seek
+    /// or a restored position) and waits until the audio thread opens the file: a broken file
+    /// returns an error here instead of failing silently
     pub fn play(&mut self) -> Result<(), String> {
         match self.player.state {
             PlayerState::Playing => return Ok(()),
@@ -429,7 +432,7 @@ impl PlayerController {
 
         reply_rx.recv().map_err(|e| e.to_string())??;
 
-        // `TrackEnded` от предыдущего трека, пришедший до запуска нового, уже неактуален
+        // `TrackEnded` from the previous track that arrived before the new one started is stale
         while self.events.try_recv().is_ok() {}
 
         self.player.state = PlayerState::Playing;

@@ -1,15 +1,15 @@
-//! Клавиши плеера, пока окно в фокусе: пробел — play/pause, ⌘→ / ⌘← (Ctrl на Windows) —
-//! следующий и предыдущий трек, как в Apple Music. Медиа-кнопки клавиатуры работают
-//! и без фокуса — см. `system_media`.
+//! Player keys while the window is focused: space — play/pause, ⌘→ / ⌘← (Ctrl on Windows) —
+//! next and previous track, like in Apple Music. Keyboard media keys work
+//! without focus too — see `system_media`.
 
 use eframe::egui::{self, Key, Modifiers};
 
 use super::{action::Action, app::PlayerApp};
 
 impl PlayerApp {
-    /// Вызывается в начале кадра, до виджетов: пробел забирается раньше, чем его увидит
-    /// кнопка в фокусе, — иначе он нажал бы её, а не поставил паузу.
-    /// Пока вводят текст (поиск, название плейлиста), клавиши остаются полю
+    /// Called at the start of the frame, before widgets: space is taken before the focused
+    /// button sees it — otherwise it would press that button instead of pausing.
+    /// While text is being typed (search, playlist name), keys stay with the field
     pub(crate) fn handle_shortcuts(&mut self, ctx: &egui::Context) {
         if ctx.text_edit_focused() {
             return;

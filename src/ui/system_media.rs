@@ -1,10 +1,10 @@
-//! Системные медиа-кнопки: ⏯ ⏮ ⏭ на клавиатуре Mac, кнопки наушников, «Пункт управления»
-//! на macOS и панель мультимедиа на Windows. Через то же место система показывает, что
-//! играет: название, исполнитель, обложка, позиция.
+//! System media keys: ⏯ ⏮ ⏭ on the Mac keyboard, headphone buttons, "Control Center"
+//! on macOS and the media overlay on Windows. Through the same channel the system shows what's
+//! playing: title, artist, cover, position.
 //!
-//! macOS отдаёт медиа-кнопки приложению, которое последним рассказало ей, что играет
-//! (MPNowPlayingInfoCenter). Поэтому текущий трек сообщается всегда, а не только ради
-//! красоты: без этого кнопки уйдут в Music.app.
+//! macOS routes media keys to the app that last told it what's playing
+//! (MPNowPlayingInfoCenter). So the current track is always reported, not just for
+//! looks: without it the keys go to Music.app.
 
 use souvlaki::{
     MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, MediaPosition, PlatformConfig,
@@ -19,33 +19,33 @@ use std::{
 use super::{action::Action, app::PlayerApp, covers::cover_bytes};
 use crate::core::playback::PlayerState;
 
-/// Насколько позиция может разойтись с той, что знает система, прежде чем её поправить.
-/// Так замечаются перемотки — ползунком, кнопкой «назад» в начало трека, повтором трека
+/// How far the position may drift from what the system knows before it's corrected.
+/// This catches seeks — with the slider, the "previous" button to the track start, track repeat
 const POSITION_DRIFT: Duration = Duration::from_millis(1500);
-/// Шаг перемотки кнопками ⏪ ⏩ (они есть на Windows)
+/// Seek step for the ⏪ ⏩ buttons (they exist on Windows)
 const SEEK_STEP: Duration = Duration::from_secs(10);
-/// Файл обложки во временной папке: система принимает обложку только ссылкой
+/// Cover file in the temp folder: the system accepts a cover only as a link
 const COVER_FILE: &str = "lmp-now-playing-cover";
 
 pub(crate) struct SystemMedia {
-    /// `None` — система не дала подключиться: приложение работает и без медиа-кнопок
+    /// `None` — the system didn't let us connect: the app works without media keys too
     controls: Option<MediaControls>,
-    /// Нажатия кнопок: приходят из системы, разбираются в `logic`
+    /// Key presses: come from the system, handled in `logic`
     events: Receiver<MediaControlEvent>,
-    /// Что уже сообщено системе; `None` — ещё ничего
+    /// What has already been reported to the system; `None` — nothing yet
     shown: Option<Shown>,
 }
 
 struct Shown {
     track: Option<PathBuf>,
     state: PlayerState,
-    /// Позиция в момент сообщения — `at`. Дальше система двигает её сама, пока играет
+    /// Position at the moment of reporting — `at`. After that the system advances it itself while playing
     position: Duration,
     at: Instant,
 }
 
 impl Shown {
-    /// Где, по мнению системы, позиция сейчас
+    /// Where the system thinks the position is now
     fn expected_position(&self, now: Instant) -> Duration {
         if self.state == PlayerState::Playing {
             self.position + now.duration_since(self.at)
@@ -56,8 +56,8 @@ impl Shown {
 }
 
 impl SystemMedia {
-    /// Подключается к системным медиа-кнопкам. Нажатие будит приложение (`request_repaint`):
-    /// кнопки работают, и когда окно скрыто
+    /// Connects to system media keys. A press wakes the app (`request_repaint`):
+    /// the keys work even when the window is hidden
     pub(crate) fn new(cc: &eframe::CreationContext) -> Self {
         let (sender, events) = mpsc::channel();
         let ctx = cc.egui_ctx.clone();
@@ -88,7 +88,7 @@ impl SystemMedia {
     }
 }
 
-/// Окно для панели мультимедиа Windows: она привязывается к окну. На macOS не нужно
+/// Window for the Windows media overlay: it's bound to a window. Not needed on macOS
 fn window_handle(cc: &eframe::CreationContext) -> Option<*mut std::ffi::c_void> {
     #[cfg(target_os = "windows")]
     {
@@ -106,7 +106,7 @@ fn window_handle(cc: &eframe::CreationContext) -> Option<*mut std::ffi::c_void> 
 }
 
 impl PlayerApp {
-    /// Нажатия системных медиа-кнопок — в действия. Вызывается в `logic`
+    /// System media key presses — into actions. Called in `logic`
     pub(crate) fn poll_system_media(&mut self) {
         while let Ok(event) = self.system_media.events.try_recv() {
             if let Some(action) = self.media_action(event) {
@@ -127,6 +127,7 @@ impl PlayerApp {
         Some(match event {
             MediaControlEvent::Toggle => Action::TogglePlay,
             MediaControlEvent::Play => Action::Play,
+            // Stop is treated as pause: the track stays selected and resumes from the same place
             MediaControlEvent::Pause | MediaControlEvent::Stop => Action::Pause,
             MediaControlEvent::Next => Action::Next,
             MediaControlEvent::Previous => Action::Previous,
@@ -142,8 +143,8 @@ impl PlayerApp {
         })
     }
 
-    /// Сообщает системе, что играет, если это изменилось: другой трек — название и обложку,
-    /// пауза, play или перемотка — состояние и позицию. Вызывается в `logic` после действий
+    /// Tells the system what's playing if it changed: another track — title and cover,
+    /// pause, play or seek — state and position. Called in `logic` after actions
     pub(crate) fn sync_system_media(&mut self) {
         if self.system_media.controls.is_none() {
             return;
@@ -169,7 +170,7 @@ impl PlayerApp {
             return;
         }
 
-        // Обложку ищем, пока `self` свободен: кандидатам нужны группы библиотеки
+        // The cover is looked up while `self` is free: the candidates need the library groups
         let cover = match &track {
             Some(track) if track_changed => {
                 let candidates = self.cover_candidates(track);
@@ -180,7 +181,7 @@ impl PlayerApp {
         let Some(controls) = &mut self.system_media.controls else {
             return;
         };
-        // Ошибки не показываем: без системной панели плеер работает как обычно
+        // Errors aren't shown: without the system panel the player works as usual
         if track_changed {
             let metadata = match &track {
                 Some(track) => MediaMetadata {
@@ -196,13 +197,13 @@ impl PlayerApp {
                 eprintln!("Could not update the system media controls: {e}");
             }
         }
-        // Новые сведения о треке стирают позицию — её отправляем и после них
+        // New track info resets the position — so it's sent after it too
         let progress = Some(MediaPosition(position));
         let playback = match (&track, state) {
             (None, _) => MediaPlayback::Stopped,
             (Some(_), PlayerState::Playing) => MediaPlayback::Playing { progress },
-            // Остановленный трек (например, после запуска) — для системы на паузе:
-            // так он виден в «Пункте управления» и запускается кнопкой ⏯
+            // A stopped track (e.g. after launch) is paused for the system:
+            // that way it's visible in "Control Center" and starts with the ⏯ button
             (Some(_), PlayerState::Paused | PlayerState::Stopped) => {
                 MediaPlayback::Paused { progress }
             }
@@ -219,17 +220,17 @@ impl PlayerApp {
     }
 }
 
-/// Кладёт обложку во временный файл и возвращает ссылку на него
+/// Puts the cover into a temp file and returns a link to it
 fn write_cover_file(bytes: &[u8]) -> Option<String> {
     let path = std::env::temp_dir().join(COVER_FILE);
     std::fs::write(&path, bytes).ok()?;
     file_url(&path)
 }
 
-/// `file://`-ссылка на файл. На macOS ссылка разбирается как URL, поэтому путь с символами,
-/// которые пришлось бы кодировать, не годится — обложки тогда не будет. Временная папка
-/// macOS (`/var/folders/…`) таких символов не содержит. Windows берёт путь после
-/// `file://` как есть
+/// A `file://` link to a file. On macOS the link is parsed as a URL, so a path with characters
+/// that would need encoding won't do — there'd be no cover then. The macOS temp folder
+/// (`/var/folders/…`) contains no such characters. Windows takes the path after
+/// `file://` as is
 fn file_url(path: &Path) -> Option<String> {
     let path = path.to_str()?;
     let plain = |c: char| c.is_ascii_alphanumeric() || "/._-".contains(c);

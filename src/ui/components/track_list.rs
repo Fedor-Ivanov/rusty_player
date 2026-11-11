@@ -1,5 +1,5 @@
-//! Список треков — общий для библиотеки и плейлиста: виртуализация (рисуются только видимые
-//! строки), выделение кликами и областью мыши, клавиши, контекстное меню.
+//! Track list — shared by Songs, album and playlist pages and the queue: virtualization (only visible
+//! rows are drawn), click and mouse marquee selection, keys, context menu.
 
 use eframe::egui::{self, Align, Key, Label, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use std::collections::BTreeSet;
@@ -17,40 +17,40 @@ use crate::{
     },
 };
 
-// Строки: высота фиксированная — без неё список нельзя виртуализировать,
-// так как позицию строки не вычислить без измерения
+// Rows: the height is fixed — without it the list can't be virtualized,
+// since a row's position can't be computed without measuring
 const TRACK_ROW_HEIGHT: f32 = 30.0;
 const TRACK_ROW_PADDING: f32 = 8.0;
 const TRACK_ROW_GAP: f32 = 6.0;
-// Скорость автопрокрутки при выделении областью: точек в секунду на каждую точку,
-// на которую курсор ушёл за край списка
+// Auto-scroll speed during marquee selection: points per second for each point
+// the cursor has gone past the list edge
 const MARQUEE_AUTOSCROLL_SPEED: f32 = 8.0;
 
-/// Состояние одного списка между кадрами: выделение и выделение областью
+/// State of one list between frames: selection and marquee selection
 pub struct TrackListView {
-    /// Различает списки: у каждого свои id прокрутки и фона
+    /// Distinguishes lists: each has its own scroll and background ids
     id: &'static str,
     selection: Selection,
     marquee: Option<Marquee>,
-    /// Строка, к которой прокрутить в следующем кадре (см. `reveal`)
+    /// The row to scroll to in the next frame (see `reveal`)
     scroll_to: Option<usize>,
 }
 
-/// Что произошло со списком за кадр — решает вызывающий
+/// What happened to the list during the frame — the caller decides
 pub struct TrackListResponse {
-    /// Двойной клик по треку
+    /// Double click on a track
     pub activated: Option<usize>,
-    /// Нажали Delete или Backspace, пока список активен
+    /// Delete or Backspace was pressed while the list is active
     pub delete: bool,
-    /// Со списком работали мышью — он становится активным для клавиатуры
+    /// The list was used with the mouse — it becomes active for the keyboard
     pub interacted: bool,
 }
 
-/// Что показать в строке
+/// What to show in a row
 pub struct RowState {
-    /// Играющий трек: подсвечен
+    /// The playing track: highlighted
     pub current: bool,
-    /// Файла нет на диске: текст приглушён, при наведении — подсказка
+    /// The file is missing from disk: muted text, a tooltip on hover
     pub missing: bool,
 }
 
@@ -64,8 +64,8 @@ impl TrackListView {
         }
     }
 
-    /// Выделяет строку `index` — так же, как клик по ней, — и прокручивает к ней список,
-    /// когда он покажется: «Show in library» из очереди
+    /// Selects row `index` — the same as clicking it — and scrolls the list to it
+    /// when it's shown: "Show in library" from the queue
     pub fn reveal(&mut self, index: usize) {
         self.selection.click(index, egui::Modifiers::NONE);
         self.scroll_to = Some(index);
@@ -75,14 +75,14 @@ impl TrackListView {
         self.selection.indices()
     }
 
-    /// Номера треков после удаления сдвигаются — старое выделение ни на что не указывает
+    /// Track indices shift after removal — the old selection points to nothing
     pub fn clear_selection(&mut self) {
         self.selection.clear();
     }
 
-    /// Рисует список. `row_state` — что показать в строке по её номеру; `keyboard` — активен
-    /// ли список для клавиш (⌘A, Esc, Delete); `context_menu` рисует пункты меню по правому
-    /// клику и получает число выделенных треков.
+    /// Draws the list. `row_state` — what to show in a row by its index; `keyboard` — whether
+    /// the list is active for keys (⌘A, Esc, Delete); `context_menu` draws right-click menu
+    /// items and receives the number of selected tracks.
     pub fn show(
         &mut self,
         ui: &mut Ui,
@@ -101,7 +101,7 @@ impl TrackListView {
             return response;
         }
 
-        // Пока набирают текст (например, в поиске), Backspace и ⌘A — для текста, а не для списка
+        // While text is being typed (e.g. in search), Backspace and ⌘A are for the text, not for the list
         if keyboard && !ui.ctx().text_edit_focused() {
             let (delete, select_all, deselect) = ui.input(|i| {
                 (
@@ -120,10 +120,10 @@ impl TrackListView {
         }
 
         let modifiers = ui.input(|i| i.modifiers);
-        // show_rows берёт зазор между строками из Ui, в котором вызван
+        // show_rows takes the row spacing from the Ui it's called in
         ui.spacing_mut().item_spacing.y = TRACK_ROW_GAP;
         let mut scroll = egui::ScrollArea::vertical();
-        // Показать строку из `reveal` — по середине видимой части списка
+        // Show the row from `reveal` — in the middle of the visible part of the list
         if let Some(row) = self.scroll_to.take() {
             let row_stride = TRACK_ROW_HEIGHT + TRACK_ROW_GAP;
             let offset = row as f32 * row_stride - (ui.available_height() - TRACK_ROW_HEIGHT) / 2.0;
@@ -131,9 +131,9 @@ impl TrackListView {
         }
         scroll
             .id_salt(self.id)
-            // Отступ задаётся самой ScrollArea: полоса прокрутки остаётся у края панели,
-            // а отступ прокручивается вместе со списком. Frame внутри show_rows не годится —
-            // его отступ сбил бы расчёт позиций строк
+            // The padding is set on the ScrollArea itself: the scrollbar stays at the panel edge,
+            // and the padding scrolls along with the list. A Frame inside show_rows won't do —
+            // its padding would break the row position calculation
             .content_margin(egui::Margin {
                 left: 16,
                 right: 16,
@@ -141,10 +141,10 @@ impl TrackListView {
                 bottom: 16,
             })
             .show_rows(ui, TRACK_ROW_HEIGHT, track_count, |ui, rows| {
-                // Верх всего содержимого списка (строки 0) в координатах экрана: show_rows
-                // отдаёт только видимый кусок, начиная со строки rows.start. Номер строки
-                // под курсором считается по высоте строк, а не по нарисованным виджетам —
-                // строк за пределами экрана нет, а выделять их областью нужно
+                // Top of the whole list content (row 0) in screen coordinates: show_rows
+                // yields only the visible chunk, starting at row rows.start. The row index
+                // under the cursor is computed from the row height, not from drawn widgets —
+                // rows off screen don't exist, but they still need to be marquee-selectable
                 let row_stride = TRACK_ROW_HEIGHT + TRACK_ROW_GAP;
                 let content_top = ui.max_rect().top() - rows.start as f32 * row_stride;
                 let row_at = |y: f32| {
@@ -152,9 +152,9 @@ impl TrackListView {
                         .min(track_count - 1)
                 };
 
-                // Фон под строками — для выделения областью и клика по пустому месту.
-                // Добавляется до строк: строки оказываются сверху и получают клики,
-                // а перетаскивание достаётся фону (строки его не ловят)
+                // Background under the rows — for marquee selection and clicks on empty space.
+                // Added before the rows: the rows end up on top and get clicks,
+                // while dragging goes to the background (rows don't catch it)
                 let visible = ui.clip_rect();
                 let background = ui.interact(
                     visible,
@@ -170,7 +170,7 @@ impl TrackListView {
                 {
                     self.marquee = Some(Marquee {
                         start: pos2(start.x, start.y - content_top),
-                        // С ⌘/Ctrl область добавляется к уже выделенному
+                        // With ⌘/Ctrl the area is added to the existing selection
                         base: if modifiers.command {
                             self.selection.indices().clone()
                         } else {
@@ -196,8 +196,8 @@ impl TrackListView {
                     if row.double_clicked() {
                         response.activated = Some(index);
                     }
-                    // Правый клик по невыделенному треку выделяет его — меню действует
-                    // на выделение, как в Finder
+                    // A right click on an unselected track selects it — the menu acts
+                    // on the selection, like in Finder
                     if row.secondary_clicked() {
                         if !self.selection.contains(index) {
                             self.selection.click(index, egui::Modifiers::NONE);
@@ -211,7 +211,7 @@ impl TrackListView {
                     });
                 }
 
-                // Рамка — после строк, чтобы лежала поверх них
+                // The frame — after the rows, so it lies on top of them
                 if let Some(marquee) = &self.marquee
                     && background.dragged()
                     && let Some(pointer) = background.interact_pointer_pos()
@@ -229,8 +229,8 @@ impl TrackListView {
                         egui::StrokeKind::Inside,
                     );
 
-                    // Курсор ушёл за верх или низ списка — прокручиваем туда, тем быстрее,
-                    // чем дальше курсор. Положительная дельта сдвигает содержимое вниз
+                    // The cursor went above or below the list — scroll there, the faster
+                    // the farther the cursor. A positive delta moves the content down
                     let overshoot = if pointer.y < visible.top() {
                         visible.top() - pointer.y
                     } else if pointer.y > visible.bottom() {
@@ -253,7 +253,7 @@ impl TrackListView {
     }
 }
 
-/// Строка списка фиксированной высоты: название слева (обрезается с «…»), длительность справа
+/// A fixed-height list row: title on the left (truncated with "…"), duration on the right
 fn track_row(
     ui: &mut Ui,
     index: usize,
@@ -263,16 +263,16 @@ fn track_row(
 ) -> egui::Response {
     let (row_rect, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), TRACK_ROW_HEIGHT), Sense::hover());
-    // Стабильный id строки: по нему egui хранит состояние анимаций. Id от позиции
-    // не годится — при прокрутке строки меняют место
+    // A stable row id: egui stores animation state by it. A position-based id
+    // won't do — rows change places when scrolling
     let row_id = ui.scope_id().with(("track_row", index));
-    // Обычный курсор, а не «рука»: клик выделяет, а не запускает трек — запуск двойным кликом
+    // A normal cursor, not a "hand": a click selects rather than plays the track — playing is by double click
     let mut row = ui.interact(row_rect, row_id, Sense::click());
     if state.missing {
         row = row.on_hover_text(t().file_missing);
     }
 
-    // Активность, выделение и наведение меняются плавно: фон и цвет текста перетекают
+    // Active, selected and hover states change smoothly: background and text color blend
     let active = ui.ctx().animate_bool_with_time_and_easing(
         row_id.with("active"),
         state.current,
@@ -291,13 +291,13 @@ fn track_row(
         HOVER_FADE_SECS,
         egui::emath::easing::cubic_out,
     );
-    // Фон рисуется до текста, поэтому оказывается под ним
+    // The background is drawn before the text, so it ends up under it
     let fill = HIGHLIGHT
         .gamma_multiply(hover)
         .lerp_to_gamma(HIGHLIGHT_STRONG, active);
     ui.painter().rect_filled(row_rect, 8, fill);
-    // Выделение — только рамка того же цвета, что подсветка играющего трека: фон остаётся
-    // свободным, и выделенный играющий трек по-прежнему видно как играющий
+    // Selection is only a frame of the same color as the playing track highlight: the background stays
+    // free, and a selected playing track is still recognizable as playing
     if selected > 0.0 {
         ui.painter().rect_stroke(
             row_rect,
@@ -316,8 +316,8 @@ fn track_row(
         TEXT_MUTED.lerp_to_gamma(TEXT, active)
     };
     let content = row_rect.shrink2(vec2(TRACK_ROW_PADDING, 0.0));
-    // Аналог justify-content: space-between: время прижато вправо,
-    // название занимает оставшееся место слева
+    // Like justify-content: space-between: the time is pushed right,
+    // the title takes the remaining space on the left
     let mut content_ui = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(content)

@@ -1,5 +1,5 @@
-//! Левая панель: сверху медиатека — заголовок с кнопкой «+» и разделы (Artists, Albums,
-//! Songs), внизу — кнопка настроек. Выбранный раздел открывается в центральной области.
+//! Left panel: the library on top — a title with a "+" button and sections (Artists, Albums,
+//! Songs), the settings button at the bottom. The selected section opens in the central area.
 
 use eframe::egui::{self, Align, Ui};
 
@@ -14,7 +14,7 @@ use crate::ui::{
 };
 
 impl PlayerApp {
-    /// Вся левая панель
+    /// The whole left panel
     pub(crate) fn render_sidebar(&mut self, ui: &mut Ui) {
         self.render_library_nav(ui);
         egui::Panel::bottom("library_sidebar_bottom")
@@ -24,15 +24,15 @@ impl PlayerApp {
             .show(ui, |ui| self.render_settings_button(ui));
     }
 
-    /// Кнопка «Settings» — заголовок того же вида, что «Library» и «Playlist»: это отдельный
-    /// раздел, а не ещё один раздел медиатеки, и он не должен сливаться с её пунктами
+    /// The "Settings" button — a title of the same kind as "Library" and "Queue": it's a separate
+    /// section, not another library section, and it shouldn't blend in with its items
     fn render_settings_button(&mut self, ui: &mut Ui) {
         if components::title_button(ui, t().settings).clicked() {
             self.settings_open = true;
         }
     }
 
-    /// Медиатека: заголовок с «+» и разделы
+    /// Library: a title with "+" and sections
     fn render_library_nav(&mut self, ui: &mut Ui) {
         egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
             let row = components::block_title(ui, t().library, Align::LEFT, TEXT);
@@ -43,8 +43,8 @@ impl PlayerApp {
             for section in Section::LIBRARY {
                 let selected = self.route.section() == section;
                 if components::nav_item(ui, section.title(), section.title(), selected).clicked() {
-                    // Пункт меню всегда открывает раздел целиком: из профиля исполнителя
-                    // или альбома — обратно к верхнему уровню
+                    // A menu item always opens the whole section: from an artist profile
+                    // or album — back to the top level
                     self.dispatch(Action::Navigate(Route::from(section)));
                 }
             }

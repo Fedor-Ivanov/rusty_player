@@ -1,4 +1,4 @@
-//! Страница сохранённого плейлиста: обложка, название, число треков, кнопки и треки.
+//! Saved playlist page: cover, title, track count, buttons and tracks.
 
 use eframe::egui::{self, Label, RichText, Sense, Ui, vec2};
 use std::collections::BTreeSet;
@@ -20,14 +20,14 @@ use crate::{
     },
 };
 
-/// Кнопка в шапке плейлиста
+/// A button in the playlist header
 enum HeaderButton {
     Play,
     Rename,
     Delete,
 }
 
-/// Пункт меню трека плейлиста
+/// Playlist track menu item
 enum TrackItem {
     AddToQueue,
     GoToAlbum,
@@ -37,12 +37,12 @@ enum TrackItem {
 }
 
 impl PlayerApp {
-    /// Страница плейлиста `id`. Двойной клик по треку играет только его (он встаёт в
-    /// очередь); весь плейлист — кнопкой «Play». Из меню трека — добавить в очередь
-    /// или убрать из плейлиста
+    /// Page of playlist `id`. A double click on a track plays only it (it goes into
+    /// the queue); the whole playlist — with the "Play" button. From the track menu — add to the queue
+    /// or remove from the playlist
     pub(crate) fn render_playlist_page(&mut self, ui: &mut Ui, id: PlaylistId) {
         let Some(playlist) = self.core.playlists.get(id) else {
-            // Плейлист удалили — к списку плейлистов
+            // The playlist was deleted — to the playlist list
             self.dispatch(Action::Navigate(Route::Playlists));
             return;
         };
@@ -50,7 +50,7 @@ impl PlayerApp {
         let track_count = playlist.tracks.len();
         let candidates = cover_candidates(&playlist.tracks);
 
-        // ---- шапка
+        // ---- header
         let mut pressed = None;
         egui::Frame::new()
             .inner_margin(egui::Margin {
@@ -86,7 +86,7 @@ impl PlayerApp {
                         ui.add_space(12.0);
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
-                            // Пустой плейлист сыграть нельзя
+                            // An empty playlist can't be played
                             ui.add_enabled_ui(track_count > 0, |ui| {
                                 if components::pill_button(ui, t().play, ButtonStyle::Primary)
                                     .clicked()
@@ -117,9 +117,9 @@ impl PlayerApp {
             return;
         }
 
-        // ---- треки
-        // Один выделенный трек из медиатеки — можно перейти к его альбому. Меню открывается
-        // после выделения, так что выделение начала кадра — то, к которому оно относится
+        // ---- tracks
+        // A single selected track from the library — can go to its album. The menu opens
+        // after selection, so the selection at the start of the frame is the one it refers to
         let single = match self
             .playlist_tracks_view
             .selection()
@@ -149,9 +149,9 @@ impl PlayerApp {
             .as_ref()
             .map(|track| track.path.clone());
         let playlists = &self.core.playlists;
-        // Сколько выделенных треков не из медиатеки (добавлены кнопкой «+» мимо неё) и сколько
-        // из неё — для пунктов «Add to library» и «Remove from library». Меню открывается
-        // после выделения, так что выделение начала кадра — то, к которому оно относится
+        // How many selected tracks are not from the library (added with the "+" button bypassing it) and how many
+        // are from it — for the "Add to library" and "Remove from library" items. The menu opens
+        // after selection, so the selection at the start of the frame is the one it refers to
         let library_paths = self.core.library.paths();
         let selected_count = self.playlist_tracks_view.selection().len();
         let outside_library = self
@@ -162,13 +162,13 @@ impl PlayerApp {
             .filter(|track| !library_paths.contains(&track.path))
             .count();
         let in_library = selected_count - outside_library;
-        // Меню знает только, сколько строк выделено: какие — узнаём после списка
+        // The menu only knows how many rows are selected: which ones — we find out after the list
         let mut menu = None;
         let response = self.playlist_tracks_view.show(
             ui,
             &playlist.tracks,
             |index| components::RowState {
-                // Подсвечен трек, который сейчас играет
+                // The currently playing track is highlighted
                 current: current_path.as_ref() == Some(&playlist.tracks[index].path),
                 missing: playlists.is_missing(&playlist.tracks[index]),
             },
@@ -234,7 +234,7 @@ impl PlayerApp {
                 id,
                 indices: selected.into_iter().collect(),
             }),
-            // Удаление из медиатеки — с подтверждением, как в Songs
+            // Removing from the library — with confirmation, like in Songs
             Some(TrackItem::RemoveFromLibrary) => {
                 let paths = selected
                     .iter()
@@ -249,7 +249,7 @@ impl PlayerApp {
                 id,
                 indices: selected,
             }),
-            // Убрать из плейлиста — не удалить файл: без подтверждения
+            // Removing from the playlist doesn't delete the file: no confirmation
             None if response.delete => Some(Action::RemoveFromPlaylist {
                 id,
                 indices: selected,

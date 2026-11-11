@@ -1,6 +1,6 @@
-//! Форматирование значений для показа.
+//! Formatting values for display.
 
-/// Секунды в `мм:сс` или `чч:мм:сс`.
+/// Seconds as `mm:ss` or `hh:mm:ss`.
 pub fn format_secs(seconds: f32) -> String {
     let seconds = seconds.max(0.0) as u64;
     let (h, m, s) = (seconds / 3600, seconds % 3600 / 60, seconds % 60);

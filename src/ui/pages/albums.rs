@@ -1,4 +1,4 @@
-//! Альбомы сеткой — все или одного исполнителя (в его профиле).
+//! Albums as a grid — all of them or one artist's (in their profile).
 
 use eframe::egui::{Align, Ui};
 
@@ -21,19 +21,19 @@ use crate::{
 };
 
 impl PlayerApp {
-    /// Все альбомы библиотеки
+    /// All library albums
     pub(crate) fn render_albums(&mut self, ui: &mut Ui) {
         self.render_album_grid(ui, "albums", None);
     }
 
-    /// Альбомы сеткой: обложка, название, исполнитель и год. С `artist` — только альбомы
-    /// этого исполнителя (имя без учёта регистра, как при группировке)
+    /// Albums as a grid: cover, title, artist and year. With `artist` — only albums
+    /// of this artist (name case-insensitive, as in grouping)
     pub(crate) fn render_album_grid(&mut self, ui: &mut Ui, id_salt: &str, artist: Option<&str>) {
         self.core.refresh_groups();
-        // Чей профиль — для перехода в альбом из него; дальше имя нужно для сравнения
+        // Whose profile — for opening an album from it; then the name is needed for comparison
         let profile = artist.map(str::to_owned);
         let artist = artist.map(str::to_lowercase);
-        // Поиск по названию — только во всех альбомах, в профиле исполнителя поля нет
+        // Search by title — only in all albums, the artist profile has no field
         let query = match artist {
             Some(_) => String::new(),
             None => normalized_query(&self.search.query),
@@ -50,7 +50,7 @@ impl PlayerApp {
                     && contains_query(&album.title, &query)
             })
             .collect();
-        // Плейлисты для подменю «Add to playlist ›»
+        // Playlists for the "Add to playlist ›" submenu
         let playlists = self.playlist_entries();
         let covers = &mut self.covers;
         if albums.is_empty() {
@@ -64,9 +64,9 @@ impl PlayerApp {
             placeholder(ui, text);
             return;
         }
-        // У каждой сетки своё выделение. Оно относится к содержимому: у профиля исполнителя —
-        // к его альбомам, в поиске — к найденным; после изменения библиотеки номера плиток
-        // значат другое
+        // Each grid has its own selection. It belongs to the content: in an artist profile —
+        // to their albums, in search — to the found ones; after a library change tile indices
+        // mean something else
         let scope = format!(
             "{}/{}/{query}",
             artist.as_deref().unwrap_or_default(),
@@ -79,8 +79,8 @@ impl PlayerApp {
         };
         grid.set_scope(&scope);
 
-        // Сетка заимствует альбомы и кэш обложек — действие запоминаем и выполняем после неё.
-        // Клик по плитке открывает альбом; воспроизведение — кнопкой на обложке и из меню
+        // The grid borrows the albums and the cover cache — the action is remembered and performed after it.
+        // A tile click opens the album; playback — via the button on the cover and from the menu
         let mut action = None;
         let response = grid.show(
             ui,
@@ -93,9 +93,9 @@ impl PlayerApp {
                 let cover = covers.get(&album.cover_candidates, CoverSize::Thumbnail);
                 components::paint_cover(ui, image_rect, cover, TILE_RADIUS);
 
-                // Кнопка play в левом верхнем углу обложки — проявляется при наведении на плитку
-                // и играет только этот альбом, независимо от выделения
-                // Кнопка play на обложке играет только этот альбом, независимо от выделения
+                // A play button in the top left corner of the cover — fades in on tile hover
+                // and plays only this album, regardless of the selection
+                // The play button on the cover plays only this album, regardless of the selection
                 if overlay_play_button(ui, image_rect, tile, &format!("play_album {index}")) {
                     action = Some((GroupAction::Play, Target::One(index)));
                 }
@@ -120,7 +120,7 @@ impl PlayerApp {
                 ]
             },
         );
-        // Соседние с экраном ряды — заранее: при прокрутке обложки уже будут готовы
+        // Rows next to the screen — in advance: covers will be ready when scrolling
         for index in grid.nearby() {
             covers.prefetch(&albums[index].cover_candidates, CoverSize::Thumbnail);
         }
@@ -138,7 +138,7 @@ impl PlayerApp {
                 None => Route::Album(album),
             }));
         } else if let Some((action, target)) = action {
-            // Альбомы — в порядке сетки, их треки — альбом за альбомом
+            // Albums — in grid order, their tracks — album by album
             let targets: Vec<usize> = match target {
                 Target::One(index) => vec![index],
                 Target::Selection => {

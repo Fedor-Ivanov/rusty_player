@@ -1,4 +1,4 @@
-//! Плашки по центру сверху окна: ошибка и прогресс добавления треков.
+//! Banners at the top center of the window: error and track adding progress.
 
 use eframe::egui::{
     self, Align, CornerRadius, CursorIcon, Label, Layout, Rect, RichText, Sense, Stroke, vec2,
@@ -11,15 +11,15 @@ use crate::ui::{
 
 const ERROR_BANNER_MAX_WIDTH: f32 = 440.0;
 const ERROR_BANNER_BUTTON_WIDTH: f32 = 48.0;
-/// Плашки сверху окна (ошибка, прогресс): отступ от верхнего края и зазор между ними
+/// Banners at the top of the window (error, progress): offset from the top edge and the gap between them
 pub const BANNER_TOP: f32 = 16.0;
 pub const BANNER_GAP: f32 = 8.0;
 const LOADING_BANNER_WIDTH: f32 = 300.0;
 
-/// Плашка с ошибкой по центру сверху, поверх всего окна, в красной рамке: текст,
-/// под ним справа — кнопка «OK».
-/// Все ошибки приложения показываются только так. Возвращает `true`, когда нажали «OK».
-/// `top` — отступ от верха окна: под плашкой прогресса, если она видна.
+/// An error banner at the top center, above the whole window, with a red border: text,
+/// below it on the right — an "OK" button.
+/// All app errors are shown only this way. Returns `true` when "OK" is pressed.
+/// `top` — offset from the top of the window: below the progress banner if it's visible.
 pub fn error_banner(ctx: &egui::Context, message: &str, top: f32) -> bool {
     let mut dismissed = false;
     egui::Area::new(egui::Id::unique("error_banner"))
@@ -33,12 +33,12 @@ pub fn error_banner(ctx: &egui::Context, message: &str, top: f32) -> bool {
                 .inner_margin(egui::Margin::symmetric(16, 12))
                 .show(ui, |ui| {
                     ui.set_max_width(ERROR_BANNER_MAX_WIDTH);
-                    // Текст сверху, переносится по строкам
+                    // Text on top, wrapped into lines
                     ui.add(Label::new(RichText::new(message).color(TEXT)).wrap());
                     ui.add_space(8.0);
 
-                    // «OK» под текстом, у правого края. Ширина строки — по тексту, а не
-                    // по максимуму плашки: короткая ошибка даёт узкую плашку
+                    // "OK" below the text, at the right edge. The row width follows the text, not
+                    // the banner's maximum: a short error gives a narrow banner
                     let ok = egui::Button::new(RichText::new(t().ok).color(TEXT))
                         .corner_radius(8)
                         .min_size(vec2(ERROR_BANNER_BUTTON_WIDTH, 0.0));
@@ -62,11 +62,11 @@ pub fn error_banner(ctx: &egui::Context, message: &str, top: f32) -> bool {
     dismissed
 }
 
-/// Плашка прогресса добавления треков по центру сверху, поверх всего окна — там же, где
-/// ошибки. `progress` — сколько обработано и сколько всего; `None`, пока идёт обход папки
-/// и общее число неизвестно. Возвращает, нажали ли «Cancel», и нижний край плашки —
-/// чтобы плашку ошибки поставить под ней, а не поверх.
-/// `template` — текст прогресса с `{done}` и `{total}`: «Adding {done} of {total}».
+/// Track adding progress banner at the top center, above the whole window — where
+/// errors are. `progress` — how many processed and how many total; `None` while the folder walk
+/// is running and the total is unknown. Returns whether "Cancel" was pressed, and the banner's bottom edge —
+/// so the error banner is placed below it rather than on top.
+/// `template` — progress text with `{done}` and `{total}`: "Adding {done} of {total}".
 pub fn loading_banner(
     ctx: &egui::Context,
     template: &str,
@@ -83,7 +83,7 @@ pub fn loading_banner(
                 .corner_radius(12)
                 .inner_margin(egui::Margin::symmetric(16, 12))
                 .show(ui, |ui| {
-                    // Ширина постоянная: иначе плашка дёргалась бы при смене цифр
+                    // Fixed width: otherwise the banner would jitter as the digits change
                     ui.set_width(LOADING_BANNER_WIDTH);
                     ui.horizontal(|ui| {
                         let text = match progress {
@@ -113,8 +113,8 @@ pub fn loading_banner(
                         });
                     });
 
-                    // Полоса прогресса — в стиле ползунка плеера. Пока общее число неизвестно,
-                    // её нет: вместо неё спиннер в строке выше
+                    // Progress bar — in the style of the player slider. While the total is unknown,
+                    // there's none: a spinner in the row above instead
                     if let Some((done, total)) = progress {
                         ui.add_space(8.0);
                         let (rect, _) =

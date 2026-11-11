@@ -1,6 +1,6 @@
-//! Навигация: что открыто в центральной области. Одно значение `Route` вместо отдельных
-//! полей «вид», «исполнитель», «альбом» — недопустимые сочетания (альбом в Songs) не выразить.
-//! Переходы — только через `PlayerApp::navigate`: там же всё, что меняется вместе с ними.
+//! Navigation: what's open in the central area. A single `Route` value instead of separate
+//! "view", "artist", "album" fields — invalid combinations (an album in Songs) can't be expressed.
+//! Transitions only via `PlayerApp::navigate`: everything that changes with them is there too.
 
 use super::app::PlayerApp;
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     ui::i18n,
 };
 
-/// Раздел — верхний уровень навигации: пункт меню и заголовок
+/// Section — the top navigation level: a menu item and a title
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) enum Section {
     NowPlaying,
@@ -19,7 +19,7 @@ pub(crate) enum Section {
 }
 
 impl Section {
-    /// Разделы медиатеки — пункты меню слева, по порядку
+    /// Library sections — menu items on the left, in order
     pub(crate) const LIBRARY: [Section; 4] = [
         Section::Artists,
         Section::Albums,
@@ -27,7 +27,7 @@ impl Section {
         Section::Playlists,
     ];
 
-    /// Название на языке интерфейса
+    /// Name in the UI language
     pub(crate) fn title(self) -> &'static str {
         let t = i18n::t();
         match self {
@@ -40,29 +40,29 @@ impl Section {
     }
 }
 
-/// Что открыто в центральной области
+/// What's open in the central area
 #[derive(Clone, PartialEq)]
 pub(crate) enum Route {
     NowPlaying,
     Artists,
-    /// Профиль исполнителя: его альбомы
+    /// Artist profile: their albums
     Artist(String),
-    /// Альбом, открытый из профиля исполнителя `artist`
+    /// An album opened from the profile of artist `artist`
     ArtistAlbum {
         artist: String,
         album: AlbumKey,
     },
     Albums,
-    /// Альбом, открытый из всех альбомов
+    /// An album opened from all albums
     Album(AlbumKey),
     Songs,
     Playlists,
-    /// Сохранённый плейлист
+    /// A saved playlist
     Playlist(PlaylistId),
 }
 
 impl Route {
-    /// Раздел, внутри которого открыта страница
+    /// The section the page is open in
     pub(crate) fn section(&self) -> Section {
         match self {
             Self::NowPlaying => Section::NowPlaying,
@@ -73,7 +73,7 @@ impl Route {
         }
     }
 
-    /// Открытый альбом — откуда бы его ни открыли
+    /// The open album — wherever it was opened from
     pub(crate) fn album(&self) -> Option<&AlbumKey> {
         match self {
             Self::Album(album) | Self::ArtistAlbum { album, .. } => Some(album),
@@ -81,7 +81,7 @@ impl Route {
         }
     }
 
-    /// Уровень выше: из альбома — туда, откуда его открыли, из профиля — к исполнителям
+    /// One level up: from an album — to where it was opened from, from a profile — to artists
     pub(crate) fn parent(&self) -> Route {
         match self {
             Self::ArtistAlbum { artist, .. } => Self::Artist(artist.clone()),
@@ -94,7 +94,7 @@ impl Route {
 }
 
 impl From<Section> for Route {
-    /// Раздел целиком — верхний уровень, без открытых исполнителя и альбома
+    /// The whole section — the top level, with no artist or album open
     fn from(section: Section) -> Self {
         match section {
             Section::NowPlaying => Self::NowPlaying,
@@ -106,8 +106,8 @@ impl From<Section> for Route {
     }
 }
 
-/// Какой альбом открыт. Альбом — пара «название + исполнитель», как при группировке;
-/// хранятся имена, а не номер: номера альбомов меняются вместе с библиотекой
+/// Which album is open. An album is a "title + artist" pair, as in grouping;
+/// names are stored, not an index: album indices change along with the library
 #[derive(Clone, PartialEq)]
 pub(crate) struct AlbumKey {
     pub(crate) title: String,
@@ -122,7 +122,7 @@ impl AlbumKey {
         }
     }
 
-    /// Сравнение без учёта регистра — как при группировке
+    /// Case-insensitive comparison — as in grouping
     pub(crate) fn matches(&self, album: &AlbumGroup) -> bool {
         album.title.to_lowercase() == self.title.to_lowercase()
             && album.artist.to_lowercase() == self.artist.to_lowercase()
@@ -130,22 +130,22 @@ impl AlbumKey {
 }
 
 impl PlayerApp {
-    /// Открывает `route`. Здесь же всё, что меняется вместе с переходом:
-    /// - поиск относится к разделу — при смене раздела очищается;
-    /// - выделение треков альбома относится к открытому альбому — при смене альбома сбрасывается
+    /// Opens `route`. Everything that changes along with the transition is here too:
+    /// - search belongs to a section — cleared when the section changes;
+    /// - album track selection belongs to the open album — reset when the album changes
     pub(crate) fn navigate(&mut self, route: Route) {
         if route == self.route {
             return;
         }
         if route.section() != self.route.section() && !self.search.is_empty() {
             self.search = Default::default();
-            // Строки Songs во время поиска — найденные треки: выделение относилось к ним
+            // Songs rows during search are the found tracks: the selection referred to them
             self.library_view.clear_selection();
         }
         if route.album() != self.route.album() {
             self.album_tracks_view.clear_selection();
         }
-        // Выделение треков плейлиста относится к открытому плейлисту
+        // Playlist track selection belongs to the open playlist
         if !matches!((&route, &self.route), (Route::Playlist(a), Route::Playlist(b)) if a == b) {
             self.playlist_tracks_view.clear_selection();
         }

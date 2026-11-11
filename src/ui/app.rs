@@ -1,6 +1,6 @@
-//! Окно плеера: состояние приложения (`PlayerApp`), кадр и раскладка панелей.
-//! Сами панели, страницы и диалоги — в `panels`, `pages`, `dialogs`: каждый файл там —
-//! `impl PlayerApp` со своей частью интерфейса.
+//! Player window: app state (`PlayerApp`), the frame and panel layout.
+//! The panels, pages and dialogs themselves are in `panels`, `pages`, `dialogs`: each file there is
+//! an `impl PlayerApp` with its own part of the UI.
 
 use eframe::egui::{self, Ui};
 use std::{
@@ -29,76 +29,76 @@ use crate::core::{
     playlists::PlaylistId,
 };
 
-// Кнопки-иконки в заголовке библиотеки и в нижнем блоке списка
+// Icon buttons in the library header and in the list's bottom block
 pub(crate) const ADD_BUTTON_SIZE: f32 = 24.0;
-// Ширина боковых панелей (библиотека и список треков): пределы ресайза и стартовая ширина
+// Side panel width (library and track list): resize limits and initial width
 pub(crate) const SIDE_PANEL_MIN_WIDTH: f32 = 180.0;
 pub(crate) const SIDE_PANEL_MAX_WIDTH: f32 = 420.0;
 pub(crate) const SIDEBAR_DEFAULT_WIDTH: f32 = 240.0;
 pub(crate) const TRACK_LIST_DEFAULT_WIDTH: f32 = 300.0;
-// Минимальная ширина центральной области (CentralPanel): её обеспечивают максимумы боковых панелей
+// Minimum width of the central area (CentralPanel): ensured by the side panels' maximums
 pub(crate) const CONTENT_MIN_WIDTH: f32 = 260.0;
-// Зазор над плашкой текущего трека
+// Gap above the current track bar
 pub(crate) const NOW_PLAYING_BAR_GAP: f32 = 8.0;
 
 pub struct PlayerApp {
-    /// Данные приложения: медиатека, сохранённые плейлисты, плеер с очередью, настройки. Меняются только
-    /// в `action::apply`
+    /// App data: library, saved playlists, player with queue, settings. Changed only
+    /// in `action::apply`
     pub(crate) core: Core,
-    /// Действия, отправленные за кадр (`dispatch`): выполняются в его конце — см. `action`
+    /// Actions sent during the frame (`dispatch`): performed at its end — see `action`
     pub(crate) actions: Vec<Action>,
     pub(crate) error: Option<String>,
-    /// Позиция ползунка (в секундах), пока пользователь его тянет
+    /// Slider position (in seconds) while the user drags it
     pub(crate) drag_secs: Option<f32>,
-    /// Фоновые добавления треков. Обрабатываются по очереди: треки второго появятся
-    /// в списке после треков первого, даже если он закончит раньше
+    /// Background track adds. Processed in turn: the second one's tracks appear
+    /// in the list after the first one's, even if it finishes earlier
     pub(crate) loaders: VecDeque<PendingLoad>,
-    /// С какого момента виден прогресс текущего добавления; `None` — не виден
+    /// Since when the current adding's progress is visible; `None` — not visible
     pub(crate) loader_shown_at: Option<Instant>,
-    /// Открыто ли окно настроек
+    /// Whether the settings window is open
     pub(crate) settings_open: bool,
     pub(crate) library_view: TrackListView,
     pub(crate) queue_view: TrackListView,
-    /// Какой список получает клавиши (⌘A, Esc, Delete) — тот, с которым работали последним
+    /// Which list receives keys (⌘A, Esc, Delete) — the one used last
     pub(crate) focus: ListFocus,
-    /// Что открыто в центральной области. Меняется только через `navigate`
+    /// What's open in the central area. Changed only via `navigate`
     pub(crate) route: Route,
-    /// Список треков открытого альбома
+    /// Track list of the open album
     pub(crate) album_tracks_view: TrackListView,
-    /// Сетки библиотеки — у каждой своё выделение и своя прокрутка
+    /// Library grids — each with its own selection and scroll
     pub(crate) artists_grid: TileGridView,
     pub(crate) albums_grid: TileGridView,
     pub(crate) artist_albums_grid: TileGridView,
-    /// Поиск в открытом виде библиотеки
+    /// Search in the open library view
     pub(crate) search: LibrarySearch,
-    /// Альбом или исполнитель, удаление которых из библиотеки ждёт подтверждения в диалоге
+    /// An album or artist whose removal from the library awaits confirmation in the dialog
     pub(crate) pending_removal: Option<LibraryRemoval>,
-    /// Окно названия плейлиста, пока открыто
+    /// The playlist name dialog, while open
     pub(crate) name_dialog: Option<NameDialog>,
-    /// Плейлисты, удаление которых ждёт подтверждения; пусто — не ждём
+    /// Playlists whose deletion awaits confirmation; empty — not waiting
     pub(crate) pending_playlist_deletion: Vec<PlaylistId>,
-    /// Сетка сохранённых плейлистов и список треков открытого плейлиста
+    /// The saved playlists grid and the open playlist's track list
     pub(crate) playlists_grid: TileGridView,
     pub(crate) playlist_tracks_view: TrackListView,
-    /// Миниатюры обложек для сетки альбомов
+    /// Cover thumbnails for the albums grid
     pub(crate) covers: CoverCache,
-    /// Обложка и фон текущего трека: плавная смена при переключении трека
+    /// Current track cover and backdrop: smooth transition when switching tracks
     pub(crate) cover_fade: CoverFade,
     pub(crate) backdrop_fade: CoverFade,
-    /// Теги текущего трека из файла — для деталей: жанр и битрейт в треке не хранятся.
-    /// Читаются один раз при смене трека; `None` внутри — файл не прочитался
+    /// Current track tags from the file — for details: genre and bitrate aren't stored in the track.
+    /// Read once on track change; `None` inside — the file couldn't be read
     pub(crate) current_details: Option<(PathBuf, Option<FileMetadata>)>,
-    /// Показан ли текст песни вместо обложки на странице текущего трека
+    /// Whether lyrics are shown instead of the cover on the current track page
     pub(crate) lyrics_open: bool,
-    /// Текст песни текущего трека — ищется при смене трека, пока текст показан, и заново,
-    /// когда пришёл ответ LRCLIB
+    /// Current track lyrics — looked up on track change while lyrics are shown, and again
+    /// when an LRCLIB answer arrives
     pub(crate) current_lyrics: Option<(PathBuf, TrackLyrics)>,
-    /// Строка, к которой текст прокручен последней: прокручиваем, только когда текущая
-    /// строка сменилась, — иначе текст нельзя было бы листать самому
+    /// The line the lyrics were last scrolled to: scroll only when the current
+    /// line changed — otherwise the user couldn't scroll the lyrics themselves
     pub(crate) lyrics_line: Option<usize>,
-    /// Системные медиа-кнопки и показ текущего трека системе
+    /// System media keys and reporting the current track to the system
     pub(crate) system_media: SystemMedia,
-    /// Где курсор, пока над окном перетаскивают файлы (см. `file_drop`)
+    /// Where the cursor is while files are dragged over the window (see `file_drop`)
     pub(crate) drop_cursor: file_drop::Cursor,
 }
 
@@ -106,22 +106,22 @@ pub struct PlayerApp {
 pub(crate) enum ListFocus {
     Library,
     Queue,
-    /// Сетка исполнителей или альбомов
+    /// Artists or albums grid
     Grid,
 }
 
 impl PlayerApp {
-    /// Из `cc` берётся контекст egui — чтобы аудиопоток мог разбудить приложение
+    /// The egui context is taken from `cc` — so the audio thread can wake the app
     pub fn new(cc: &eframe::CreationContext) -> Self {
         let (core, error) = Core::load(eframe::storage_dir(crate::APP_NAME), {
-            // Трек доиграл — будим приложение: eframe вызовет `logic` и при скрытом окне
+            // Track finished — wake the app: eframe calls `logic` even with a hidden window
             let ctx = cc.egui_ctx.clone();
             move || ctx.request_repaint()
         });
         i18n::set_language(core.settings.language());
         let outdated = core.library.outdated_paths();
-        // Последнего трека нет (первый запуск или его не было при выходе) — в Now Playing
-        // показать нечего, открываем альбомы
+        // No last track (first launch or it was absent at exit) — Now Playing has nothing
+        // to show, open albums
         let route = if core.controller.player().current_track.is_none() {
             Route::Albums
         } else {
@@ -159,17 +159,17 @@ impl PlayerApp {
             system_media: SystemMedia::new(cc),
             drop_cursor: file_drop::Cursor::new(cc),
         };
-        // Библиотека сохранена старым форматом — один раз перечитываем её теги в фоне
+        // The library was saved in an old format — re-read its tags once in the background
         if let Some(paths) = outdated {
             app.start_loading(Source::Files(paths), Destination::LibraryRefresh);
         }
         app
     }
 
-    /// Сохраняет очередь и настройки, если они изменились. Вызывается в конце `logic`
-    /// (изменения без окна: следующий трек) и в конце `ui` (изменения из интерфейса).
-    /// Пока зажата кнопка мыши, жест не закончен (например, тянут ползунок громкости) —
-    /// настройки пишутся один раз, когда кнопку отпустят
+    /// Saves the queue and settings if they changed. Called at the end of `logic`
+    /// (changes without a window: next track) and at the end of `ui` (changes from the UI).
+    /// While a mouse button is held, the gesture isn't finished (e.g. the volume slider is being dragged) —
+    /// settings are written once, when the button is released
     pub(crate) fn save_if_changed(&mut self, ctx: &egui::Context) {
         let result = self.core.save_queue_if_changed();
         self.report_error(result);
@@ -179,9 +179,9 @@ impl PlayerApp {
         }
     }
 
-    /// Сообщает об ошибке, если `result` — ошибка: она появится на плашке. `Ok` ничего
-    /// не делает и уже показанную ошибку не сбрасывает: плашка закрывается только кнопкой
-    /// «OK», иначе ошибка исчезала бы сама при следующем удачном действии
+    /// Reports an error if `result` is an error: it appears on the banner. `Ok` does
+    /// nothing and doesn't clear an already shown error: the banner closes only with the
+    /// "OK" button, otherwise the error would disappear by itself on the next successful action
     pub(crate) fn report_error(&mut self, result: Result<(), String>) {
         if let Err(e) = result {
             self.error = Some(e);
@@ -190,8 +190,8 @@ impl PlayerApp {
 }
 
 impl eframe::App for PlayerApp {
-    /// Выход: медиатека пишется в фоне — дожидаемся, чтобы последние изменения сохранились.
-    /// С OpenGL (на Windows, см. `window_glass::renderer`) eframe передаёт сюда его контекст
+    /// Exit: the library is written in the background — wait so the latest changes are saved.
+    /// With OpenGL (on Windows, see `window_glass::renderer`) eframe passes its context here
     #[cfg(not(target_os = "windows"))]
     fn on_exit(&mut self) {
         self.core.flush();
@@ -202,27 +202,27 @@ impl eframe::App for PlayerApp {
         self.core.flush();
     }
 
-    /// Окно прозрачное: под ним система рисует размытие, поэтому сами ничего не заливаем
+    /// The window is transparent: the system draws a blur under it, so we don't fill anything ourselves
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         [0.0; 4]
     }
 
-    /// Всё, что должно работать и без интерфейса: eframe вызывает это перед каждым `ui`,
-    /// а когда окно скрыто (другой рабочий стол, свёрнуто, закрыто другими окнами) и `ui`
-    /// не вызывается совсем — по `request_repaint`. Так следующий трек включается, даже
-    /// когда окно не видно: аудиопоток будит приложение, когда трек доиграл
+    /// Everything that must work without the UI too: eframe calls this before every `ui`,
+    /// and when the window is hidden (another desktop, minimized, covered by other windows) and `ui`
+    /// isn't called at all — on `request_repaint`. This way the next track starts even
+    /// when the window isn't visible: the audio thread wakes the app when a track finishes
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Трек доиграл — переходим к следующему в очереди
+        // Track finished — move to the next one in the queue
         if self.core.controller.poll_events() {
             self.dispatch(Action::TrackEnded);
         }
-        // Медиа-кнопки — тоже здесь: они работают, и когда окно не видно
+        // Media keys are here too: they work even when the window isn't visible
         self.poll_system_media();
-        // Пришёл текст песни из LRCLIB — найдём текст текущего трека заново
+        // Lyrics arrived from LRCLIB — look up the current track's lyrics again
         if self.core.lyrics.poll() {
             self.current_lyrics = None;
         }
-        // Медиатека: ответ фоновой проверки пропавших файлов, ошибки фоновой записи
+        // Library: the background missing-files check answer, background write errors
         if let Some(e) = self.core.poll_background() {
             self.report_error(Err(e));
         }
@@ -236,33 +236,33 @@ impl eframe::App for PlayerApp {
         self.handle_shortcuts(ui.ctx());
         self.covers.update(ui.ctx());
 
-        // Пока трек играет, обновляем время и ползунок. Это перерисовка видимого окна;
-        // переход к следующему треку от неё не зависит — см. `logic`
+        // While a track plays, update the time and the slider. This repaints the visible window;
+        // moving to the next track doesn't depend on it — see `logic`
         if self.core.controller.player().state == PlayerState::Playing {
             ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
 
-        // Тонировка системного размытия — первой, под всеми панелями. Других заливок у панелей
-        // нет: стекло по всему окну одного цвета
+        // System blur tint — first, under all panels. Panels have no other
+        // fills: the glass is the same color across the whole window
         let tint = window_tint(self.core.settings.glass());
         ui.painter().rect_filled(ui.max_rect(), 0, tint);
-        // Место под фон Now Playing — сразу над тонировкой, под всеми панелями. Сам фон
-        // известен, только когда дойдём до центральной области, а заходит он и под панель
-        // управления, нарисованную раньше, — поэтому место занимаем заранее
+        // A slot for the Now Playing backdrop — right above the tint, under all panels. The backdrop itself
+        // is known only once we reach the central area, but it also extends under the controls
+        // panel drawn earlier — so the slot is reserved in advance
         let root_painter = ui.painter().clone();
         let backdrop_slot = root_painter.add(egui::Shape::Noop);
 
-        // У CentralPanel нет своей минимальной ширины — он получает остаток после боковых
-        // панелей. Поэтому минимум обеспечивают их максимумы: каждая может занять только то,
-        // что останется после минимумов всего, что ещё не размещено. При сужении окна боковые
-        // панели сжимаются первыми, а центральная не становится уже CONTENT_MIN_WIDTH
+        // CentralPanel has no minimum width of its own — it gets what's left after the side
+        // panels. So the minimum is ensured by their maximums: each can take only what
+        // remains after the minimums of everything not yet placed. When the window narrows, the side
+        // panels shrink first, and the central one doesn't get narrower than CONTENT_MIN_WIDTH
         let sidebar_max_width = (ui.available_width() - SIDE_PANEL_MIN_WIDTH - CONTENT_MIN_WIDTH)
             .clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH);
 
-        // egui подсвечивает край панели белой линией при наведении и перетаскивании —
-        // толщину берёт из hovered/active fg_stroke родительского Ui. Вместо неё у нас своя
-        // линия в тон интерфейса (paint_resize_line), поэтому на время боковых панелей
-        // толщина обнуляется. Меняется только толщина: цвет текста виджетов внутри не страдает
+        // egui highlights the panel edge with a white line on hover and drag —
+        // taking the width from the parent Ui's hovered/active fg_stroke. Instead we have our own
+        // line in the UI's tone (paint_resize_line), so for the side panels
+        // the width is zeroed. Only the width changes: widget text color inside is unaffected
         let widgets = &mut ui.style_mut().visuals.widgets;
         let edge_strokes = (
             widgets.hovered.fg_stroke.width,
@@ -271,7 +271,7 @@ impl eframe::App for PlayerApp {
         widgets.hovered.fg_stroke.width = 0.0;
         widgets.active.fg_stroke.width = 0.0;
 
-        // Библиотека — у левого края окна
+        // Library — at the left edge of the window
         let sidebar = egui::Panel::left("library_sidebar")
             .frame(egui::Frame::new())
             .default_size(SIDEBAR_DEFAULT_WIDTH)
@@ -280,11 +280,11 @@ impl eframe::App for PlayerApp {
             .show_separator_line(false)
             .show(ui, |ui| self.render_sidebar(ui));
 
-        // Считается после боковой панели: available_width уже без её ширины
+        // Computed after the side panel: available_width already excludes its width
         let track_list_max_width = (ui.available_width() - CONTENT_MIN_WIDTH)
             .clamp(SIDE_PANEL_MIN_WIDTH, SIDE_PANEL_MAX_WIDTH);
 
-        // Список треков — у правого края окна
+        // Track list — at the right edge of the window
         let track_list = egui::Panel::right("track_list")
             .frame(egui::Frame::new())
             .default_size(TRACK_LIST_DEFAULT_WIDTH)
@@ -292,14 +292,14 @@ impl eframe::App for PlayerApp {
             .resizable(true)
             .show_separator_line(false)
             .show(ui, |ui| {
-                // Panel подгоняет ширину под содержимое, поэтому без этого она сжимается
-                // обратно до минимума сразу после перетаскивания края
+                // Panel fits its width to the content, so without this it shrinks
+                // back to the minimum right after the edge is dragged
                 ui.set_min_width(ui.available_width());
 
-                // Блок прижат к низу панели. Добавляется до списка: панель сразу забирает
-                // своё место, а ScrollArea получает только оставшееся и под блок не заходит
+                // The block is pinned to the bottom of the panel. Added before the list: the panel takes
+                // its space right away, and the ScrollArea gets only the rest and doesn't go under the block
                 egui::Panel::bottom("track_list_bottom")
-                    // Без своего frame панель залила бы себя фоном по умолчанию
+                    // Without its own frame the panel would fill itself with the default background
                     .frame(egui::Frame::new().inner_margin(16.0))
                     .resizable(false)
                     .show_separator_line(false)
@@ -316,28 +316,28 @@ impl eframe::App for PlayerApp {
             widgets.active.fg_stroke.width,
         ) = edge_strokes;
 
-        // Панели нужно добавлять до CentralPanel — он занимает всё оставшееся место.
-        // Добавлена после боковых, поэтому тянется только под центральной карточкой
+        // Panels must be added before CentralPanel — it takes all remaining space.
+        // Added after the side panels, so it stretches only under the central card
         egui::Panel::bottom("audio_controls")
             .frame(egui::Frame::new())
             .show_separator_line(false)
             .show(ui, |ui| {
-                // Без стекла: контролы лежат прямо на фоне окна
+                // No glass: the controls sit directly on the window background
                 egui::Frame::new().inner_margin(16.0).show(ui, |ui| {
                     self.render_controls(ui);
                 });
             });
 
-        // Центральная область без своего фона: под ней тонированное системное размытие
+        // Central area without its own background: the tinted system blur is under it
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
             .show(ui, |ui| {
-                // Открыт вид библиотеки, а трек есть — внизу плашка с ним, по клику на которую
-                // возвращаемся к деталям трека. Добавляется до содержимого: панель сразу
-                // забирает своё место, и содержимое под неё не заходит.
-                // Появляется и прячется, выезжая снизу: show_collapsible анимирует это сам,
-                // и содержимое над плашкой сдвигается вместе с ней. Высота задана точно —
-                // иначе в первом кадре панель не знает её и прыгает
+                // A library view is open and there's a track — a bar with it at the bottom; clicking it
+                // returns to the track details. Added before the content: the panel takes
+                // its space right away, and the content doesn't go under it.
+                // Appears and hides by sliding from the bottom: show_collapsible animates this itself,
+                // and the content above the bar moves along with it. The height is set exactly —
+                // otherwise the panel doesn't know it in the first frame and jumps
                 let mut show_bar = self.route != Route::NowPlaying
                     && self.core.controller.player().current_track.is_some();
                 egui::Panel::bottom("now_playing_bar")
@@ -381,8 +381,8 @@ impl eframe::App for PlayerApp {
         self.render_playlist_name_dialog(ui.ctx());
         self.render_playlist_deletion_dialog(ui.ctx());
 
-        // Плашки поверх всего окна, по центру сверху: прогресс добавления (только когда
-        // poll_loaders решил его показать) и под ним ошибка — пока не нажмут «OK»
+        // Banners over the whole window, top center: adding progress (only when
+        // poll_loaders decided to show it) and below it an error — until "OK" is pressed
         let mut banner_top = components::BANNER_TOP;
         if self.loader_shown_at.is_some()
             && let Some(pending) = self.loaders.front()
@@ -403,16 +403,16 @@ impl eframe::App for PlayerApp {
             self.error = None;
         }
 
-        // Линии ресайза — последними, поверх всего, на границе панелей — там, где egui даёт тянуть край
+        // Resize lines — last, on top of everything, at panel borders — where egui lets the edge be dragged
         let sidebar_rect = sidebar.response.rect;
         components::paint_resize_line(ui, sidebar_rect.right(), sidebar_rect.y_range());
         let track_list_rect = track_list.response.rect;
         components::paint_resize_line(ui, track_list_rect.left(), track_list_rect.y_range());
 
-        // Перетаскивание файлов: зоны поверх всего окна, пока файлы над ним
+        // File drag and drop: zones over the whole window while files are over it
         self.render_file_drop(ui.ctx(), track_list_rect);
 
-        // Всё, что пользователь сделал за кадр, — после отрисовки, до сохранения
+        // Everything the user did during the frame — after drawing, before saving
         self.apply_actions(ui.ctx());
         self.save_if_changed(ui.ctx());
     }

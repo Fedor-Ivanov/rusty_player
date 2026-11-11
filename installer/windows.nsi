@@ -1,11 +1,11 @@
-; Установщик LMP для Windows (NSIS).
+; LMP installer for Windows (NSIS).
 ;
-; Сборка (можно на macOS: brew install makensis):
+; Build (works on macOS too: brew install makensis):
 ;   cargo build --release --target x86_64-pc-windows-gnu
 ;   mkdir -p target/installer
 ;   makensis -DVERSION=0.1.0 installer/windows.nsi
 ;
-; Результат: target/installer/LMP Setup 0.1.0.exe
+; Output: target/installer/LMP Setup 0.1.0.exe
 
 Unicode true
 !include "MUI2.nsh"
@@ -17,10 +17,10 @@ Unicode true
 !define APP_NAME "LMP"
 !define APP_EXE "lmp.exe"
 !define PUBLISHER "Fedor Ivanov"
-; Ключ в реестре для «Установка и удаление программ»
+; Registry key for "Add or remove programs"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\LMP"
 
-; Пути считаются от папки скрипта
+; Paths are relative to the script folder
 !define ROOT ".."
 !define APP_BINARY "${ROOT}\target\x86_64-pc-windows-gnu\release\${APP_EXE}"
 !define APP_ICON "${ROOT}\assets\images\app_icon.ico"
@@ -28,7 +28,7 @@ Unicode true
 Name "${APP_NAME}"
 OutFile "${ROOT}\target\installer\${APP_NAME} Setup ${VERSION}.exe"
 InstallDir "$PROGRAMFILES64\${APP_NAME}"
-; Если программа уже стоит — предложить ту же папку
+; If the program is already installed — suggest the same folder
 InstallDirRegKey HKLM "${UNINSTALL_KEY}" "InstallLocation"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
@@ -44,7 +44,7 @@ VIAddVersionKey "LegalCopyright" "${PUBLISHER}"
 !define MUI_ICON "${APP_ICON}"
 !define MUI_UNICON "${APP_ICON}"
 !define MUI_ABORTWARNING
-; На последней странице — галочка «Запустить LMP»
+; On the last page — a "Run LMP" checkbox
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
 
 !insertmacro MUI_PAGE_WELCOME
@@ -59,8 +59,8 @@ VIAddVersionKey "LegalCopyright" "${PUBLISHER}"
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Russian"
 
-; Установка для всех пользователей (в Program Files, с правами администратора),
-; поэтому и ярлыки — в общие «Пуск» и рабочий стол, а не текущего пользователя
+; Install for all users (into Program Files, with admin rights),
+; so the shortcuts also go to the shared Start menu and desktop, not the current user's
 Function .onInit
   SetShellVarContext all
 FunctionEnd
@@ -70,7 +70,7 @@ Function un.onInit
 FunctionEnd
 
 Section "${APP_NAME}" SecApp
-  ; Сама программа обязательна — галочку не снять
+  ; The program itself is required — the checkbox can't be unchecked
   SectionIn RO
   SetOutPath "$INSTDIR"
   File "${APP_BINARY}"
@@ -80,7 +80,7 @@ Section "${APP_NAME}" SecApp
   CreateShortcut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
   CreateShortcut "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\Uninstall.exe"
 
-  ; Запись для «Установка и удаление программ»
+  ; Entry for "Add or remove programs"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "${PUBLISHER}"

@@ -1,6 +1,6 @@
-//! Текст песни для трека: свой (файл `.lrc`, теги) или из LRCLIB. Ответы LRCLIB хранятся
-//! в папке данных (`lyrics/`, файл на трек) — один трек спрашивается один раз. Запросы идут
-//! в фоне: пока ответа нет, показывается то, что есть локально.
+//! Lyrics for a track: local (`.lrc` file, tags) or from LRCLIB. LRCLIB answers are stored
+//! in the data folder (`lyrics/`, a file per track) — each track is queried once. Requests run
+//! in the background: until the answer arrives, what's available locally is shown.
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -26,57 +26,57 @@ use crate::core::{
 
 const DIR_NAME: &str = "lyrics";
 const FORMAT_VERSION: u32 = 1;
-/// «Не найден» запоминается на столько: потом спросим снова — текст могли добавить
+/// "Not found" is remembered for this long: then ask again — lyrics may have been added
 const NOT_FOUND_TTL: Duration = Duration::from_secs(14 * 24 * 60 * 60);
-/// Сеть или сервер подвели (LRCLIB нередко отвечает «занят») — запрос повторяется
-/// с такими паузами
+/// Network or server failed (LRCLIB often answers "busy") — the request is retried
+/// with these pauses
 const RETRY_DELAYS: [Duration; 3] = [
     Duration::from_secs(2),
     Duration::from_secs(5),
     Duration::from_secs(10),
 ];
-/// Не дозвались и после повторов — спросим снова не раньше чем через столько
+/// Failed even after retries — ask again no sooner than after this long
 const FAILED_RETRY_AFTER: Duration = Duration::from_secs(5 * 60);
 
-/// Что показать для трека
+/// What to show for a track
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TrackLyrics {
-    /// Лучший из найденных текстов: синхронизированный важнее обычного
+    /// The best of the found lyrics: synced wins over plain
     pub lyrics: Option<Lyrics>,
-    /// LRCLIB ещё отвечает — текст может появиться или смениться синхронизированным
+    /// LRCLIB is still answering — lyrics may appear or be replaced with synced ones
     pub searching: bool,
-    /// LRCLIB знает, что в треке нет слов
+    /// LRCLIB knows the track is instrumental
     pub instrumental: bool,
-    /// LRCLIB недавно не ответил (сеть, сервер занят) — спросим позже
+    /// LRCLIB didn't answer recently (network, server busy) — ask later
     pub unavailable: bool,
-    /// Спросить LRCLIB нельзя: поиск в интернете выключен в настройках
+    /// LRCLIB can't be asked: online search is disabled in settings
     pub offline: bool,
 }
 
-/// Ответ LRCLIB в кеше
+/// Cached LRCLIB answer
 #[derive(Serialize, Deserialize)]
 struct Cached {
     version: u32,
-    /// Когда спрашивали — секунды Unix
+    /// When it was asked — Unix seconds
     checked_at: u64,
     remote: Remote,
 }
 
 pub struct LyricsFinder {
-    /// Папка кеша; `None` — папка данных недоступна, ответы живут до выхода
+    /// Cache folder; `None` — the data folder is unavailable, answers live until exit
     dir: Option<PathBuf>,
-    /// Ответы, известные в этом запуске: прочитанные из кеша и полученные
+    /// Answers known in this run: read from the cache and received
     known: HashMap<TrackSignature, Remote>,
-    /// Запросы в пути
+    /// Requests in flight
     pending: HashSet<TrackSignature>,
-    /// Не дозвались (сеть, сервер занят) — и когда: спросим снова через `FAILED_RETRY_AFTER`
+    /// Failed requests (network, server busy) and when: ask again after `FAILED_RETRY_AFTER`
     failed: HashMap<TrackSignature, Instant>,
     sender: Sender<(TrackSignature, Result<Remote, String>)>,
     results: Receiver<(TrackSignature, Result<Remote, String>)>,
-    /// Будит приложение, когда пришёл ответ: оно перечитает текст
+    /// Wakes the app when an answer arrives: it re-reads the lyrics
     wake: Arc<dyn Fn() + Send + Sync>,
-    /// Можно ли спрашивать LRCLIB — поиск в интернете в настройках. Без него — свои тексты
-    /// и уже скачанные
+    /// Whether LRCLIB may be asked — online search in settings. Without it — local lyrics
+    /// and already downloaded ones
     online: bool,
 }
 
@@ -99,8 +99,8 @@ impl LyricsFinder {
         self.online = online;
     }
 
-    /// Текст песни трека. Свой синхронизированный — сразу он. Иначе спрашиваем LRCLIB
-    /// (из кеша или запросом в фоне): его синхронизированный важнее своего обычного
+    /// Lyrics for a track. A local synced one is used right away. Otherwise ask LRCLIB
+    /// (from cache or with a background request): its synced lyrics win over local plain ones
     pub fn find(&mut self, track: &Track) -> TrackLyrics {
         let local = load_lyrics(&track.path);
         if local.as_ref().is_some_and(|lyrics| lyrics.synced) {
@@ -150,8 +150,8 @@ impl LyricsFinder {
         }
     }
 
-    /// Забирает пришедшие ответы и сохраняет их в кеш. `true` — что-то пришло: текст
-    /// трека стоит найти заново
+    /// Takes the arrived answers and caches them. `true` — something arrived: the track's
+    /// lyrics should be looked up again
     pub fn poll(&mut self) -> bool {
         let mut arrived = false;
         while let Ok((signature, result)) = self.results.try_recv() {
@@ -171,7 +171,7 @@ impl LyricsFinder {
         arrived
     }
 
-    /// Ответ LRCLIB, если он уже известен: в этом запуске или из кеша, пока не устарел
+    /// LRCLIB answer if already known: in this run or from the cache, until stale
     fn remote(&mut self, signature: &TrackSignature) -> Option<Remote> {
         if let Some(remote) = self.known.get(signature) {
             return Some(remote.clone());
@@ -186,7 +186,7 @@ impl LyricsFinder {
         Some(cached.remote)
     }
 
-    /// Спрашивает LRCLIB в фоне, если ещё не спрашивали. `true` — ответ ждём
+    /// Asks LRCLIB in the background if not asked yet. `true` — waiting for the answer
     fn request(&mut self, signature: TrackSignature) -> bool {
         if let Some(failed_at) = self.failed.get(&signature) {
             if failed_at.elapsed() < FAILED_RETRY_AFTER {
@@ -222,14 +222,14 @@ impl LyricsFinder {
             checked_at: now_secs(),
             remote: remote.clone(),
         };
-        // Кеш — не данные пользователя: не сохранился — спросим ещё раз в другой раз
+        // The cache is not user data: if it wasn't saved — we'll ask again some other time
         if let Err(e) = write_atomically(&dir.join(file_name(signature)), &cached) {
             eprintln!("Could not save the lyrics: {e}");
         }
     }
 }
 
-/// Сигнатура трека для LRCLIB. Без исполнителя или названия искать бессмысленно
+/// Track signature for LRCLIB. Without an artist or title there's no point searching
 fn signature(track: &Track) -> Option<TrackSignature> {
     let artist = track.artist.trim();
     let title = track.title.trim();
@@ -244,7 +244,7 @@ fn signature(track: &Track) -> Option<TrackSignature> {
     })
 }
 
-/// Имя файла кеша — хеш сигнатуры без учёта регистра
+/// Cache file name — a case-insensitive hash of the signature
 fn file_name(signature: &TrackSignature) -> String {
     let key = format!(
         "{}\u{1f}{}\u{1f}{}\u{1f}{}",
@@ -277,7 +277,7 @@ mod tests {
             ..signature()
         };
         assert_eq!(file_name(&signature()), file_name(&lower));
-        // Хеш не должен меняться между версиями — иначе кеш потеряется
+        // The hash must not change between versions — otherwise the cache is lost
         assert_eq!(file_name(&signature()), "33735ca278336967.json");
     }
 

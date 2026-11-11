@@ -1,4 +1,4 @@
-//! Окно настроек. Открывается кнопкой «Settings» внизу боковой панели (`panels::sidebar`).
+//! Settings window. Opened with the "Settings" button at the bottom of the sidebar (`panels::sidebar`).
 
 use eframe::egui::{self, Align, CursorIcon, Label, Layout, RichText, Sense, Stroke, Ui, vec2};
 
@@ -13,25 +13,23 @@ use crate::{
     },
 };
 
-/// Ширина содержимого окна настроек
 const SETTINGS_WIDTH: f32 = 320.0;
-/// Кружки оттенков стекла: диаметр и зазор между ними
+/// Glass tint circles: diameter and the gap between them
 const SWATCH_SIZE: f32 = 20.0;
 const SWATCH_GAP: f32 = 8.0;
-/// Ползунок прозрачности — шириной во все кружки оттенков, чтобы строки были вровень
+/// Transparency slider — as wide as all the tint circles, so the rows line up
 const TRANSPARENCY_SLIDER_WIDTH: f32 =
     SWATCH_SIZE * GlassTint::ALL.len() as f32 + SWATCH_GAP * (GlassTint::ALL.len() - 1) as f32;
 const SLIDER_TRACK_HEIGHT: f32 = 4.0;
 const SLIDER_THUMB_RADIUS: f32 = 7.0;
-/// Строка настройки — высотой с самый высокий элемент, список языка: подписи всех строк
-/// по центру своих элементов, а строки идут с одним шагом
+/// A setting row — as tall as the tallest element, the language dropdown: all row labels
+/// are centered on their elements, and the rows have the same step
 const SETTING_ROW_HEIGHT: f32 = 32.0;
-/// Зазор между строками настроек
 const SETTING_ROW_GAP: f32 = 6.0;
 
 impl PlayerApp {
-    /// Окно настроек — пока открыто. Изменения применяются сразу и сохраняются сами
-    /// (см. `save_settings_if_changed`); «Done», Esc и клик мимо окна просто закрывают его
+    /// Settings window — while open. Changes apply immediately and are saved automatically
+    /// (see `save_settings_if_changed`); "Done", Esc and a click outside just close it
     pub(crate) fn render_settings_dialog(&mut self, ctx: &egui::Context) {
         if !self.settings_open {
             return;
@@ -55,11 +53,11 @@ impl PlayerApp {
             });
             ui.add_space(SETTING_ROW_GAP);
 
-            // Стекло: оттенок и прозрачность. Меняются сразу — окно видно за диалогом
+            // Glass: tint and transparency. They change immediately — the window is visible behind the dialog
             let glass = self.core.settings.glass();
             setting_row(ui, t().glass_tint, |ui| {
                 ui.spacing_mut().item_spacing.x = SWATCH_GAP;
-                // В right_to_left первым добавляется самый правый кружок
+                // In right_to_left the rightmost circle is added first
                 for tint in GlassTint::ALL.into_iter().rev() {
                     if tint_button(ui, tint, glass.tint == tint) {
                         self.dispatch(Action::SetGlass(Glass { tint, ..glass }));
@@ -83,8 +81,8 @@ impl PlayerApp {
             });
             ui.add_space(SETTING_ROW_GAP);
 
-            // Поиск в интернете: выключен, пока пользователь не включит — ниже сказано,
-            // что и куда отправляется
+            // Online search: off until the user turns it on — below it says
+            // what is sent and where
             let online = self.core.settings.online_lookups();
             setting_row(ui, t().online_search, |ui| {
                 if components::switch(ui, online) {
@@ -102,7 +100,7 @@ impl PlayerApp {
             );
             ui.add_space(SETTING_ROW_GAP + 6.0);
 
-            // Версия приложения — из Cargo.toml на момент сборки
+            // App version — from Cargo.toml at build time
             setting_row(ui, t().version, |ui| {
                 ui.add(Label::new(
                     RichText::new(env!("CARGO_PKG_VERSION"))
@@ -122,10 +120,10 @@ impl PlayerApp {
     }
 }
 
-/// Строка настройки: подпись слева, элемент управления прижат вправо
-/// Высота строки задана заранее: в `horizontal` подпись центрировалась бы по высоте строки
-/// на момент её добавления — до элемента справа, и рядом с высоким списком языка
-/// оказывалась бы выше его середины
+/// A setting row: label on the left, the control pushed to the right
+/// The row height is set in advance: in `horizontal` the label would be centered on the row height
+/// at the moment it's added — before the element on the right, and next to the tall language dropdown
+/// it would end up above its middle
 fn setting_row(ui: &mut Ui, label: &str, add_control: impl FnOnce(&mut Ui)) {
     let size = vec2(ui.available_width(), SETTING_ROW_HEIGHT);
     ui.allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
@@ -135,7 +133,7 @@ fn setting_row(ui: &mut Ui, label: &str, add_control: impl FnOnce(&mut Ui)) {
     });
 }
 
-/// Кружок оттенка стекла; выбранный — в светлом кольце. Возвращает `true` по клику
+/// A glass tint circle; the selected one has a light ring. Returns `true` on click
 fn tint_button(ui: &mut Ui, tint: GlassTint, selected: bool) -> bool {
     let (rect, response) = ui.allocate_exact_size(vec2(SWATCH_SIZE, SWATCH_SIZE), Sense::click());
     let response = response
@@ -145,7 +143,7 @@ fn tint_button(ui: &mut Ui, tint: GlassTint, selected: bool) -> bool {
     let radius = SWATCH_SIZE / 2.0;
     let painter = ui.painter();
     if selected {
-        // Кольцо снаружи и зазор до цвета — кружок выбранного чуть меньше
+        // The ring outside and the gap to the color — the selected circle is slightly smaller
         painter.circle_stroke(center, radius - 1.0, Stroke::new(1.5, TEXT));
         painter.circle_filled(center, radius - 4.0, tint_swatch(tint));
     } else {

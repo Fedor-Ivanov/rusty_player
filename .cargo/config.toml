@@ -1,4 +1,4 @@
-# Сборка под Windows с macOS/Linux: cargo build --release --target x86_64-pc-windows-gnu
-# Нужен MinGW: brew install mingw-w64
+# Building for Windows from macOS/Linux: cargo build --release --target x86_64-pc-windows-gnu
+# Requires MinGW: brew install mingw-w64
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"

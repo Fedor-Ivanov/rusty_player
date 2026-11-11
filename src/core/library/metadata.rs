@@ -1,4 +1,4 @@
-//! Теги аудиофайлов: название, исполнитель, альбом, длительность, обложка.
+//! Audio file tags: title, artist, album, duration, cover.
 
 use lofty::{
     config::ParseOptions,
@@ -15,24 +15,25 @@ use std::{
 pub struct FileMetadata {
     pub title: String,
     pub artist: String,
-    /// Исполнитель альбома (Album Artist) — по нему треки собираются в альбомы. Пусто,
-    /// если в тегах его нет
+    /// Album artist (Album Artist) — tracks are grouped into albums by it. Empty
+    /// if it's not in the tags
     pub album_artist: String,
     pub album: String,
     pub duration_secs: u64,
     pub year: Option<u16>,
     pub track_number: Option<u32>,
     pub disc_number: Option<u32>,
-    /// Жанр; пусто, если в тегах его нет. В медиатеке не хранится — нужен только деталям
-    /// текущего трека
+    /// Genre; empty if it's not in the tags. Not stored in the library — only needed for the
+    /// current track's details
     pub genre: String,
-    /// Битрейт звука в кбит/с — без служебных данных файла; если его не посчитать — общий
+    /// Audio bitrate in kbps — without the file's overhead; if it can't be computed — the overall
     pub bitrate_kbps: Option<u32>,
 }
 
+/// Reads the tags of `path`. No title in tags — the file name without extension
 pub fn get_file_metadata(path: &Path) -> Result<FileMetadata, String> {
-    // Обложку здесь не читаем: метаданные читаются для всего списка, а обложки нужны только
-    // видимым на экране — их по требованию читает кэш обложек (см. read_cover)
+    // The cover is not read here: metadata is read for the whole list, while covers are needed only
+    // for those visible on screen — the cover cache reads them on demand (see read_cover)
     let tagged = Probe::open(path)
         .map_err(|e| format!("Could not open the file: {e}"))?
         .options(ParseOptions::new().read_cover_art(false))
@@ -64,9 +65,9 @@ pub fn get_file_metadata(path: &Path) -> Result<FileMetadata, String> {
         .unwrap_or_default();
 
     let duration_secs = tagged.properties().duration().as_secs();
-    // Год — из даты записи или отдельного поля года, смотря что есть в тегах
+    // Year — from the recording date or a separate year field, whichever the tags have
     let year = tag.and_then(|t| t.date()).map(|date| date.year);
-    // Номер трека и диска — для порядка треков в альбоме
+    // Track and disc number — for track order within an album
     let track_number = tag.and_then(|t| t.track());
     let disc_number = tag.and_then(|t| t.disk());
     let genre = tag
@@ -92,7 +93,7 @@ pub fn get_file_metadata(path: &Path) -> Result<FileMetadata, String> {
     })
 }
 
-/// Обложка альбома из тегов файла. Читается по требованию — кэшем обложек интерфейса.
+/// Album cover from the file's tags. Read on demand — by the UI cover cache.
 pub fn read_cover(path: &Path) -> Option<Vec<u8>> {
     let tagged = Probe::open(path).ok()?.read().ok()?;
     let tag = tagged.primary_tag().or_else(|| tagged.first_tag())?;
@@ -101,10 +102,10 @@ pub fn read_cover(path: &Path) -> Option<Vec<u8>> {
         .map(|picture| picture.data().to_vec())
 }
 
-/// Обложка альбома картинкой рядом с аудиофайлами в папке `dir` — так её часто хранят
-/// вместо тегов. Берётся картинка с говорящим именем (`cover.jpg`, `Folder.png`, `front.jpg`…),
-/// а если таких нет — единственная картинка в папке. Из нескольких картинок с другими
-/// именами (сканы буклета, задник диска) не угадываем: показать не ту хуже, чем никакую
+/// Album cover as an image next to the audio files in folder `dir` — it's often stored this way
+/// instead of in tags. An image with a telling name is used (`cover.jpg`, `Folder.png`, `front.jpg`…),
+/// and if there are none — the only image in the folder. Among several images with other
+/// names (booklet scans, disc back) we don't guess: showing the wrong one is worse than none
 pub fn read_folder_cover(dir: &Path) -> Option<Vec<u8>> {
     const IMAGE_EXTENSIONS: [&str; 4] = ["jpg", "jpeg", "png", "webp"];
     const COVER_NAMES: [&str; 5] = ["cover", "folder", "front", "albumart", "album"];
@@ -137,18 +138,18 @@ pub fn read_folder_cover(dir: &Path) -> Option<Vec<u8>> {
     fs::read(cover).ok()
 }
 
-/// Чинит теги в Windows-1251, прочитанные как Latin-1.
+/// Fixes Windows-1251 tags that were read as Latin-1.
 ///
-/// Старые MP3 часто хранят русские теги в кодировке Windows-1251, но в ID3 указана Latin-1.
-/// Тогда каждый байт кириллицы читается как латинская буква с диакритикой:
-/// «Полет шмеля» превращается в «Ïîëåò øìåëÿ». Такую строку собираем обратно в байты
-/// и декодируем как Windows-1251.
+/// Old MP3s often store Russian tags in Windows-1251, but ID3 declares Latin-1.
+/// Then each Cyrillic byte is read as a Latin letter with a diacritic:
+/// "Полет шмеля" turns into "Ïîëåò øìåëÿ". Such a string is turned back into bytes
+/// and decoded as Windows-1251.
 ///
-/// Чтобы не испортить настоящий латинский текст с диакритикой («Beyoncé», «Mötley Crüe»),
-/// перекодируем, только если большинство букв — из диапазона U+00C0..=U+00FF, где
-/// в Windows-1251 лежит кириллица.
+/// To avoid breaking real Latin text with diacritics ("Beyoncé", "Mötley Crüe"),
+/// re-encode only if most letters are in the U+00C0..=U+00FF range, where
+/// Windows-1251 has Cyrillic.
 pub(crate) fn fix_cp1251(text: &str) -> String {
-    // Строка из Latin-1 состоит только из символов до U+00FF — иначе это уже не наш случай
+    // A Latin-1 string consists only of characters up to U+00FF — otherwise it's not our case
     if text.chars().any(|c| c as u32 > 0xFF) {
         return text.to_owned();
     }
@@ -172,7 +173,7 @@ mod tests {
     use super::{fix_cp1251, read_folder_cover};
     use std::fs;
 
-    /// Новая пустая временная папка с файлами `names`; содержимое файла — его имя
+    /// A new empty temp folder with files `names`; each file's content is its name
     fn folder(names: &[&str]) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!("lmp_cover_{}", fastrand::u64(..)));
         fs::create_dir_all(&dir).unwrap();
@@ -190,17 +191,17 @@ mod tests {
             fs::remove_dir_all(dir).unwrap();
             cover
         };
-        // Единственная картинка — обложка, как бы она ни называлась
+        // The only image is the cover, whatever it's called
         assert_eq!(
             read(&["01 Song.mp3", "Dot Hacker - N°3.jpg"]).as_deref(),
             Some("Dot Hacker - N°3.jpg")
         );
-        // Говорящее имя важнее остальных картинок, регистр не важен
+        // A telling name wins over other images, case doesn't matter
         assert_eq!(
             read(&["back.jpg", "Folder.PNG", "cd.jpg"]).as_deref(),
             Some("Folder.PNG")
         );
-        // Несколько картинок без говорящих имён — не угадываем
+        // Several images without telling names — don't guess
         assert_eq!(read(&["back.jpg", "booklet.jpg"]), None);
         assert_eq!(read(&["01 Song.mp3"]), None);
     }

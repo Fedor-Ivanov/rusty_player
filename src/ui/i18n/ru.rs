@@ -1,4 +1,4 @@
-//! Тексты интерфейса на русском.
+//! UI texts in Russian.
 
 use super::{Plural, Texts, slavic_plural_form};
 

@@ -1,15 +1,15 @@
-//! Локализация интерфейса: все тексты на английском, французском, русском и украинском.
+//! UI localization: all texts in English, French, Russian and Ukrainian.
 //!
-//! Тексты одного языка — значение `Texts` (см. `en.rs`, `fr.rs`, `ru.rs`, `uk.rs`). Забытый в переводе текст
-//! не даст собрать проект: у структуры нет значений по умолчанию.
-//! Тексты с подстановками — шаблоны с `{имя}`, их заполняет `fill`. Числа со словом —
-//! `Texts::count`: в русском и украинском у слова три формы (1 трек, 2 трека, 5 треков).
+//! The texts of one language are a `Texts` value (see `en.rs`, `fr.rs`, `ru.rs`, `uk.rs`). A text missed in a translation
+//! won't let the project build: the struct has no default values.
+//! Texts with substitutions are templates with `{name}`, filled by `fill`. Numbers with a word —
+//! `Texts::count`: in Russian and Ukrainian a word has three forms (1 трек, 2 трека, 5 треков).
 //!
-//! Новый язык: вариант в `settings::Language` (и в `Language::ALL`), файл с его `Texts`
-//! и строки в `t()` и `language_name` — компилятор подскажет, где не хватает.
+//! A new language: a variant in `settings::Language` (and in `Language::ALL`), a file with its `Texts`
+//! and lines in `t()` and `language_name` — the compiler will point out what's missing.
 //!
-//! Язык один на всё приложение: виджетам он нужен без лишних параметров, поэтому текущий
-//! язык — глобальный (`set_language`), а тексты берутся через `t()`.
+//! There's one language for the whole app: widgets need it without extra parameters, so the current
+//! language is global (`set_language`), and texts are taken via `t()`.
 
 mod en;
 mod fr;
@@ -20,8 +20,8 @@ use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::core::settings::{GlassTint, Language};
 
-/// Правило форм числа в русском и украинском: 1, 21, 101 — «трек»; 2–4, 22–24 — «трека»;
-/// 0, 5–20, 25–30, 111–114 — «треков»
+/// Plural form rule in Russian and Ukrainian: 1, 21, 101 — "трек"; 2–4, 22–24 — "трека";
+/// 0, 5–20, 25–30, 111–114 — "треков"
 fn slavic_plural_form(count: usize) -> PluralForm {
     match (count % 10, count % 100) {
         (1, rest) if rest != 11 => PluralForm::One,
@@ -30,7 +30,7 @@ fn slavic_plural_form(count: usize) -> PluralForm {
     }
 }
 
-/// Слово в формах для разных чисел. В английском `few` совпадает с `many`
+/// A word in forms for different numbers. In English `few` is the same as `many`
 pub struct Plural {
     one: &'static str,
     few: &'static str,
@@ -38,7 +38,7 @@ pub struct Plural {
 }
 
 impl Plural {
-    /// Две формы — как в английском: 1 track, 2 tracks
+    /// Two forms — like in English: 1 track, 2 tracks
     const fn two(one: &'static str, many: &'static str) -> Self {
         Self {
             one,
@@ -47,13 +47,13 @@ impl Plural {
         }
     }
 
-    /// Три формы — как в русском: 1 трек, 2 трека, 5 треков
+    /// Three forms — like in Russian: 1 трек, 2 трека, 5 треков
     const fn three(one: &'static str, few: &'static str, many: &'static str) -> Self {
         Self { one, few, many }
     }
 }
 
-/// Какая форма слова нужна для числа
+/// Which word form is needed for a number
 pub enum PluralForm {
     One,
     Few,
@@ -61,73 +61,73 @@ pub enum PluralForm {
 }
 
 pub struct Texts {
-    /// Какую форму слова брать для числа — правило языка
+    /// Which word form to use for a number — the language's rule
     plural_form: fn(usize) -> PluralForm,
 
-    // ---- разделы
+    // ---- sections
     pub library: &'static str,
     pub now_playing: &'static str,
     pub artists: &'static str,
     pub albums: &'static str,
     pub songs: &'static str,
-    /// Очередь воспроизведения — правая панель
+    /// Playback queue — the right panel
     pub queue: &'static str,
-    /// Сохранённые плейлисты — раздел медиатеки
+    /// Saved playlists — a library section
     pub playlists: &'static str,
     pub settings: &'static str,
 
-    // ---- слова для чисел
+    // ---- words for numbers
     pub track_count: Plural,
     pub song_count: Plural,
     pub album_count: Plural,
     pub playlist_count: Plural,
     pub artist_count: Plural,
-    /// «…и ещё N файлов не удалось добавить»
+    /// "…and N more files could not be added"
     pub more_file_count: Plural,
 
-    // ---- заглушки
+    // ---- placeholders
     pub no_tracks: &'static str,
     pub library_empty: &'static str,
     pub no_results: &'static str,
     pub no_albums: &'static str,
     pub no_playlists: &'static str,
 
-    // ---- поиск и счётчики в заголовках
+    // ---- search and counters in titles
     pub search: &'static str,
-    /// Сколько найдено в Songs: `{found}`, `{tracks}` — всего треков с числом
+    /// How many found in Songs: `{found}`, `{tracks}` — total tracks with the number
     pub found_of: &'static str,
-    /// Битрейт в деталях трека: «320 kbps»
+    /// Bitrate in track details: "320 kbps"
     pub bitrate: &'static str,
 
-    // ---- добавление файлов
+    // ---- adding files
     pub open_files: &'static str,
     pub add_files: &'static str,
     pub add_folder: &'static str,
-    /// Фильтр в окне выбора файлов
+    /// Filter in the file picker dialog
     pub audio_files: &'static str,
-    /// Плашка прогресса: `{done}`, `{total}`
+    /// Progress banner: `{done}`, `{total}`
     pub adding_progress: &'static str,
     pub updating_library_progress: &'static str,
     pub scanning_folder: &'static str,
     pub no_audio_found: &'static str,
-    /// Хвост списка ошибок добавления: `{more}` — число со словом из `more_file_count`
+    /// Tail of the adding errors list: `{more}` — a number with a word from `more_file_count`
     pub more_files_failed: &'static str,
 
-    // ---- переходы и подсказки
+    // ---- navigation and hints
     pub show_artist: &'static str,
-    /// Пункт меню трека: открыть его альбом
+    /// Track menu item: open its album
     pub go_to_album: &'static str,
-    /// Пункт меню трека в очереди: показать его в списке песен медиатеки
+    /// Queue track menu item: show it in the library's song list
     pub show_in_library: &'static str,
-    /// Кнопка текста песни и заглушка, когда текста нет
+    /// Lyrics button and the placeholder when there are no lyrics
     pub lyrics: &'static str,
     pub no_lyrics: &'static str,
     pub searching_lyrics: &'static str,
-    /// LRCLIB не ответил — текста пока нет
+    /// LRCLIB didn't answer — no lyrics yet
     pub lyrics_unavailable: &'static str,
-    /// Текста нет, а поиск в интернете выключен
+    /// No lyrics, and online search is off
     pub lyrics_offline: &'static str,
-    /// Трек без слов — так о нём говорит LRCLIB
+    /// An instrumental track — that's what LRCLIB says about it
     pub instrumental: &'static str,
     pub show_album: &'static str,
     pub show_current_track: &'static str,
@@ -136,12 +136,12 @@ pub struct Texts {
     pub repeat_all: &'static str,
     pub repeat_one: &'static str,
 
-    // ---- действия
+    // ---- actions
     pub play: &'static str,
     pub add_to_queue: &'static str,
     pub remove_from_library: &'static str,
     pub remove_from_queue: &'static str,
-    /// Действия с несколькими выделенными: `{items}` — число со словом
+    /// Actions on several selected items: `{items}` — a number with a word
     pub play_items: &'static str,
     pub add_items_to_queue: &'static str,
     pub remove_items_from_library: &'static str,
@@ -151,26 +151,26 @@ pub struct Texts {
     pub ok: &'static str,
     pub done: &'static str,
 
-    // ---- плейлисты
-    /// Подсказки кнопок очереди: сохранить её как плейлист и очистить
+    // ---- playlists
+    /// Queue button tooltips: save it as a playlist and clear it
     pub save_queue: &'static str,
-    /// Сохранить очередь в связанный с ней плейлист: `{playlist}`
+    /// Save the queue into its linked playlist: `{playlist}`
     pub save_queue_to: &'static str,
     pub save_as_new_playlist: &'static str,
     pub clear_queue: &'static str,
-    /// Подменю «добавить в сохранённый плейлист» и его первый пункт
+    /// The "add to saved playlist" submenu and its first item
     pub add_to_playlist: &'static str,
     pub new_playlist: &'static str,
-    /// Убрать треки со страницы плейлиста: `{items}` — число со словом
+    /// Remove tracks on the playlist page: `{items}` — a number with a word
     pub remove_from_this_playlist: &'static str,
-    /// Трек плейлиста не из медиатеки — в медиатеку: `{items}` — число со словом
+    /// A playlist track not from the library — into the library: `{items}` — a number with a word
     pub add_to_library: &'static str,
     pub add_items_to_library: &'static str,
     pub remove_items_from_this_playlist: &'static str,
     pub rename: &'static str,
     pub delete: &'static str,
     pub save: &'static str,
-    /// Заголовки окна названия плейлиста и подсказка в поле
+    /// Playlist name dialog titles and the field hint
     pub save_playlist_title: &'static str,
     pub new_playlist_title: &'static str,
     pub rename_playlist_title: &'static str,
@@ -180,14 +180,14 @@ pub struct Texts {
     pub delete_playlist_message: &'static str,
     pub delete_playlists_title: &'static str,
     pub delete_playlists_message: &'static str,
-    /// «Удалить 3 плейлиста» — пункт меню нескольких выделенных
+    /// "Delete 3 playlists" — the menu item for several selected
     pub delete_items: &'static str,
 
-    // ---- настройки
+    // ---- settings
     pub language: &'static str,
     pub version: &'static str,
     pub online_search: &'static str,
-    /// Под переключателем: что и куда отправляется
+    /// Under the switch: what is sent and where
     pub online_search_note: &'static str,
     pub glass_tint: &'static str,
     pub transparency: &'static str,
@@ -198,7 +198,7 @@ pub struct Texts {
     pub tint_rose: &'static str,
     pub tint_amber: &'static str,
 
-    // ---- диалог удаления из медиатеки
+    // ---- remove-from-library dialog
     pub remove_album_title: &'static str,
     /// `{album}`
     pub remove_album_message: &'static str,
@@ -223,8 +223,8 @@ pub struct Texts {
 }
 
 impl Texts {
-    /// Подпись действия над треками: для одного — `one` («Add to library»), для нескольких —
-    /// шаблон `many` с их числом в `{items}` («Add 3 tracks to library»)
+    /// Label of an action on tracks: for one — `one` ("Add to library"), for several —
+    /// the `many` template with their number in `{items}` ("Add 3 tracks to library")
     pub fn for_tracks(&self, one: &str, many: &str, count: usize) -> String {
         match count {
             0 | 1 => one.to_owned(),
@@ -232,7 +232,7 @@ impl Texts {
         }
     }
 
-    /// Число со словом в нужной форме: «3 tracks», «3 трека»
+    /// A number with a word in the right form: "3 tracks", "3 трека"
     pub fn count(&self, count: usize, word: &Plural) -> String {
         let form = match (self.plural_form)(count) {
             PluralForm::One => word.one,
@@ -243,7 +243,7 @@ impl Texts {
     }
 }
 
-/// Шаблон с подставленными значениями: `{name}` в `template` заменяется на значение
+/// A template with substituted values: `{name}` in `template` is replaced with the value
 pub fn fill(template: &str, values: &[(&str, &str)]) -> String {
     values
         .iter()
@@ -252,7 +252,7 @@ pub fn fill(template: &str, values: &[(&str, &str)]) -> String {
         })
 }
 
-/// Название оттенка стекла на текущем языке
+/// Glass tint name in the current language
 pub fn tint_name(tint: GlassTint) -> &'static str {
     match tint {
         GlassTint::Graphite => t().tint_graphite,
@@ -264,8 +264,8 @@ pub fn tint_name(tint: GlassTint) -> &'static str {
     }
 }
 
-/// Название языка на нём самом — так языки показывают в списке выбора: кто не понимает
-/// текущий язык интерфейса, всё равно найдёт свой
+/// A language's name in itself — that's how languages are shown in the picker: whoever doesn't understand
+/// the current UI language will still find their own
 pub fn language_name(language: Language) -> &'static str {
     match language {
         Language::English => "English",
@@ -277,12 +277,12 @@ pub fn language_name(language: Language) -> &'static str {
 
 static LANGUAGE: AtomicU8 = AtomicU8::new(0);
 
-/// Делает `language` языком интерфейса — со следующего кадра им пишутся все тексты
+/// Makes `language` the UI language — from the next frame all texts use it
 pub fn set_language(language: Language) {
     LANGUAGE.store(language as u8, Ordering::Relaxed);
 }
 
-/// Тексты на текущем языке
+/// Texts in the current language
 pub fn t() -> &'static Texts {
     let value = LANGUAGE.load(Ordering::Relaxed);
     let language = Language::ALL
@@ -302,7 +302,7 @@ mod tests {
     use super::{Texts, en, fill, fr, ru, uk};
     use std::collections::BTreeSet;
 
-    /// Шаблоны с подстановками — чтобы сравнить их наборы `{…}` в языках
+    /// Templates with substitutions — to compare their `{…}` sets across languages
     fn templates(t: &Texts) -> [(&'static str, &'static str); 25] {
         [
             ("found_of", t.found_of),
@@ -368,7 +368,7 @@ mod tests {
         assert_eq!(tracks(5), "5 треків");
         assert_eq!(tracks(21), "21 трек");
 
-        // Во французском 0 — тоже единственное число
+        // In French 0 is singular too
         let t = &fr::TEXTS;
         assert_eq!(t.count(0, &t.track_count), "0 piste");
         assert_eq!(t.count(1, &t.track_count), "1 piste");

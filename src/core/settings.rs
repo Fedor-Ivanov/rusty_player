@@ -1,6 +1,6 @@
-//! Настройки приложения. Хранятся между запусками в `settings.json` в папке данных —
-//! рядом с библиотекой и плейлистом, но отдельно от них: смена настройки не переписывает
-//! библиотеку, а формат библиотеки не зависит от настроек.
+//! App settings. Kept between launches in `settings.json` in the data folder —
+//! next to the library and the queue, but separately: changing a setting doesn't rewrite
+//! the library, and the library format doesn't depend on settings.
 
 use serde::{Deserialize, Serialize};
 use std::{fs, io::ErrorKind, path::PathBuf};
@@ -21,7 +21,7 @@ pub enum Language {
 }
 
 impl Language {
-    /// Все языки — в порядке списка в настройках
+    /// All languages — in the order of the list in settings
     pub const ALL: [Language; 4] = [
         Language::English,
         Language::French,
@@ -30,8 +30,8 @@ impl Language {
     ];
 }
 
-/// Оттенок стекла — тонировки поверх системного размытия под окном. Сами цвета — в теме
-/// интерфейса
+/// Glass tint — tinting over the system blur under the window. The colors themselves are in the UI
+/// theme
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GlassTint {
     #[default]
@@ -44,7 +44,7 @@ pub enum GlassTint {
 }
 
 impl GlassTint {
-    /// Все оттенки — в порядке кружков в настройках
+    /// All tints — in the order of the circles in settings
     pub const ALL: [GlassTint; 6] = [
         GlassTint::Graphite,
         GlassTint::Blue,
@@ -55,13 +55,13 @@ impl GlassTint {
     ];
 }
 
-/// Стекло окна: оттенок и прозрачность
+/// Window glass: tint and transparency
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(default)]
 pub struct Glass {
     pub tint: GlassTint,
-    /// 0.0 — тонировка непрозрачная, за окном ничего не видно; 1.0 — самое прозрачное
-    /// стекло, какое допускает интерфейс
+    /// 0.0 — the tint is opaque, nothing is visible behind the window; 1.0 — the most transparent
+    /// glass the UI allows
     pub transparency: f32,
 }
 
@@ -74,18 +74,18 @@ impl Default for Glass {
     }
 }
 
-/// Все настройки. Отсутствующее в файле поле получает значение по умолчанию
-/// (`serde(default)`): файл от прошлой версии приложения, где этой настройки ещё не было,
-/// читается без ошибок — отдельная версия формата не нужна
+/// All settings. A field missing from the file gets its default value
+/// (`serde(default)`): a file from a previous app version that didn't have this setting yet
+/// is read without errors — no separate format version is needed
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
 pub struct Settings {
     language: Language,
     volume: Volume,
     glass: Glass,
-    /// Искать в интернете то, чего нет в файлах: фото исполнителей (Deezer) и тексты
-    /// песен (LRCLIB). Выключено, пока пользователь не включит: иначе приложение без спроса
-    /// отправляло бы сервисам имена исполнителей и названия треков
+    /// Search online for what's missing from files: artist photos (Deezer) and
+    /// lyrics (LRCLIB). Off until the user turns it on: otherwise the app would send
+    /// artist names and track titles to the services without asking
     online_lookups: bool,
 }
 
@@ -126,16 +126,16 @@ impl Settings {
     }
 }
 
-/// Файл настроек. Помнит, что в нём лежит, — неизменившиеся настройки не перезаписывает
+/// Settings file. Remembers what's in it — doesn't rewrite unchanged settings
 pub struct SettingsStore {
-    /// Куда сохранять; `None` — папка данных недоступна, настройки живут только до выхода
+    /// Where to save; `None` — the data folder is unavailable, settings live only until exit
     file: Option<PathBuf>,
     saved: Settings,
 }
 
 impl SettingsStore {
-    /// Загружает настройки из папки данных `dir`. Файла нет — настройки по умолчанию.
-    /// Третьим значением — ошибка для показа пользователю, если файл не прочитался
+    /// Loads settings from data folder `dir`. No file — default settings.
+    /// The third value is an error to show the user if the file couldn't be read
     pub fn load(dir: Option<PathBuf>) -> (Self, Settings, Option<String>) {
         let file = dir.map(|dir| dir.join(FILE_NAME));
         let (settings, error) = match file.as_ref().map(fs::read_to_string) {
@@ -160,13 +160,13 @@ impl SettingsStore {
         (store, settings, error)
     }
 
-    /// Сохраняет настройки, если они изменились с прошлого сохранения
+    /// Saves settings if they changed since the last save
     pub fn save_if_changed(&mut self, settings: &Settings) -> Result<(), String> {
         if *settings == self.saved {
             return Ok(());
         }
-        // Сохранёнными считаем и при ошибке: иначе запись повторялась бы каждый кадр.
-        // Следующее изменение попробует снова
+        // Considered saved even on error: otherwise writing would repeat every frame.
+        // The next change will try again
         self.saved = settings.clone();
         let Some(file) = &self.file else {
             return Ok(());
@@ -203,14 +203,14 @@ mod tests {
         assert!(error.is_none());
         assert_eq!(loaded, settings);
 
-        // Файл старой версии без громкости: язык читается, громкость — по умолчанию
+        // An old-version file without volume: the language is read, the volume is default
         fs::write(dir.join(super::FILE_NAME), r#"{"language":"Russian"}"#).unwrap();
         let (_, loaded, error) = SettingsStore::load(Some(dir.clone()));
         assert!(error.is_none());
         assert_eq!(loaded.language(), Language::Russian);
         assert_eq!(loaded.volume(), Volume::default());
         assert_eq!(loaded.glass(), Glass::default());
-        // Поиск в интернете — только если пользователь включил
+        // Online search — only if the user enabled it
         assert!(!loaded.online_lookups());
 
         fs::remove_dir_all(dir).unwrap();

@@ -1,4 +1,4 @@
-//! Какие файлы плеер умеет играть и где их искать.
+//! Which files the player can play and where to find them.
 
 use std::{
     fs::{self, File},
@@ -13,13 +13,13 @@ use symphonia::{
     default::{get_codecs, get_probe},
 };
 
-/// Расширения поддерживаемых аудиофайлов (в нижнем регистре).
+/// Extensions of supported audio files (lowercase).
 pub const SUPPORTED_EXTENSIONS: &[&str] = &["mp3", "flac", "wav", "ogg", "m4a", "aac"];
 
-/// Все аудиофайлы поддерживаемых форматов в папке, включая вложенные, по алфавиту пути
-/// без учёта регистра.
-/// Остальные файлы (обложки, плейлисты и т. п.) пропускаются; вложенные папки,
-/// которые не удалось прочитать, — тоже, чтобы одна такая папка не срывала всё добавление.
+/// All audio files of supported formats in a folder, including subfolders, sorted by path
+/// case-insensitively.
+/// Other files (covers, playlists, etc.) are skipped; subfolders
+/// that couldn't be read are skipped too, so one such folder doesn't break the whole adding.
 pub fn find_audio_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
     fn walk(dir: &Path, found: &mut Vec<PathBuf>) -> std::io::Result<()> {
         for entry in fs::read_dir(dir)? {
@@ -35,7 +35,7 @@ pub fn find_audio_files(dir: &Path) -> Result<Vec<PathBuf>, String> {
 
     let mut found = Vec::new();
     walk(dir, &mut found).map_err(|e| format!("Could not read the folder: {e}"))?;
-    // Без учёта регистра, как в Finder и Проводнике
+    // Case-insensitive, like in Finder and Explorer
     found.sort_by_key(|path| path.to_string_lossy().to_lowercase());
     Ok(found)
 }
@@ -46,9 +46,9 @@ fn is_supported_extension(path: &Path) -> bool {
         .is_some_and(|e| SUPPORTED_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
 }
 
-/// Проверяет, что файл можно воспроизвести: известное расширение, контейнер и кодек.
+/// Checks that a file can be played: known extension, container and codec.
 pub fn check_supported(path: &Path) -> Result<(), String> {
-    // Уровень 0: расширение
+    // Level 0: extension
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -62,12 +62,12 @@ pub fn check_supported(path: &Path) -> Result<(), String> {
     let mut hint = Hint::new();
     hint.with_extension(&ext);
 
-    // Уровень 1: контейнер
+    // Level 1: container
     let format = get_probe()
         .probe(&hint, mss, Default::default(), Default::default())
         .map_err(|_| "Unsupported or damaged file".to_string())?;
 
-    // Берём первую аудиодорожку
+    // Take the first audio track
     let params = format
         .tracks()
         .iter()
@@ -77,7 +77,7 @@ pub fn check_supported(path: &Path) -> Result<(), String> {
         })
         .ok_or_else(|| "The file has no audio track".to_string())?;
 
-    // Уровень 2: кодек
+    // Level 2: codec
     get_codecs()
         .make_audio_decoder(params, &AudioDecoderOptions::default())
         .map_err(|_| "This audio codec is not supported".to_string())?;

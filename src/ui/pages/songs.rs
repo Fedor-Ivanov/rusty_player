@@ -1,4 +1,4 @@
-//! Песни: все треки медиатеки списком (или найденные поиском).
+//! Songs: all library tracks as a list (or those found by search).
 
 use eframe::egui::{self, Ui};
 
@@ -11,8 +11,8 @@ use crate::ui::{
 };
 
 impl PlayerApp {
-    /// Все треки библиотеки списком — или найденные поиском. Двойной клик добавляет трек
-    /// в плейлист и запускает его; из меню — добавить в плейлист или убрать из библиотеки
+    /// All library tracks as a list — or those found by search. A double click adds the track
+    /// to the queue and plays it; from the menu — add to a playlist or remove from the library
     pub(crate) fn render_songs(&mut self, ui: &mut Ui) {
         if self.core.library.tracks().is_empty() {
             placeholder(ui, t().library_empty);
@@ -29,7 +29,7 @@ impl PlayerApp {
             return;
         }
 
-        // «Play» — показанные треки в порядке списка заменяют плейлист и играют
+        // "Play" — the shown tracks in list order replace the queue and play
         let mut play_all = false;
         egui::Frame::new()
             .inner_margin(egui::Margin {
@@ -45,8 +45,8 @@ impl PlayerApp {
             self.dispatch(Action::PlayLibraryTracks(self.shown_song_indices()));
         }
 
-        // «Go to album» — только для одного выделенного трека. Меню открывается после
-        // выделения, так что выделение начала кадра — то, к которому оно относится
+        // "Go to album" — only for a single selected track. The menu opens after
+        // selection, so the selection at the start of the frame is the one it refers to
         let album = match self.library_view.selection().iter().collect::<Vec<_>>()[..] {
             [&row] => self
                 .song_index(row)
@@ -55,13 +55,13 @@ impl PlayerApp {
             _ => None,
         };
 
-        // Номера строк списка — номера в `found` (во время поиска) или сразу в медиатеке.
-        // Меню знает только, сколько строк выделено: какие — узнаём после списка
+        // List row indices are indices in `found` (during search) or directly in the library.
+        // The menu only knows how many rows are selected: which ones — we find out after the list
         let mut menu = None;
         let library = &self.core.library;
         let found = self.search.found_songs.as_ref();
         let tracks = found.map_or(library.tracks(), |found| &found.tracks);
-        // Плейлисты для подменю «Add to playlist ›»
+        // Playlists for the "Add to playlist ›" submenu
         let playlists = self.playlist_entries();
         let response = self.library_view.show(
             ui,
@@ -100,7 +100,7 @@ impl PlayerApp {
         }
     }
 
-    /// Номер в библиотеке трека из строки `row` списка Songs
+    /// Library index of the track in row `row` of the Songs list
     pub(crate) fn song_index(&self, row: usize) -> Option<usize> {
         match &self.search.found_songs {
             Some(found) => found.indices.get(row).copied(),
@@ -108,7 +108,7 @@ impl PlayerApp {
         }
     }
 
-    /// Номера в библиотеке всех треков, показанных в Songs, по порядку
+    /// Library indices of all tracks shown in Songs, in order
     pub(crate) fn shown_song_indices(&self) -> Vec<usize> {
         match &self.search.found_songs {
             Some(found) => found.indices.clone(),

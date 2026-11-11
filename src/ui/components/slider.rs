@@ -1,11 +1,11 @@
-//! Горизонтальный ползунок: перемотка в нижней панели, прозрачность стекла в настройках.
+//! Horizontal slider: seeking in the bottom panel, glass transparency in settings.
 
 use eframe::egui::{CornerRadius, CursorIcon, Rect, Sense, Ui, pos2, vec2};
 
 use crate::ui::style::theme::{SLIDER_TRACK, TEXT};
 
-/// Ползунок значения 0.0..=1.0 шириной `width`. Возвращает новое значение, пока его тянут
-/// или по клику
+/// A 0.0..=1.0 value slider of width `width`. Returns the new value while dragged
+/// or on click
 pub fn slider(
     ui: &mut Ui,
     width: f32,
@@ -16,7 +16,7 @@ pub fn slider(
     let (rect, response) =
         ui.allocate_exact_size(vec2(width, thumb_radius * 2.0), Sense::click_and_drag());
     let response = response.on_hover_cursor(CursorIcon::PointingHand);
-    // Центр бегунка ходит от края до края с отступом на радиус — как он нарисован
+    // The thumb center moves edge to edge inset by the radius — as it is drawn
     let left = rect.left() + thumb_radius;
     let span = (rect.width() - 2.0 * thumb_radius).max(1.0);
     let changed = if response.dragged() || response.clicked() {
@@ -36,8 +36,8 @@ pub fn slider(
     changed
 }
 
-/// Ползунок в `rect`: дорожка высотой `track_height` во всю ширину, заполненная до
-/// `fraction` (0.0..=1.0), и круглый бегунок радиуса `thumb_radius`
+/// Slider in `rect`: a track of height `track_height` across the full width, filled up to
+/// `fraction` (0.0..=1.0), and a round thumb of radius `thumb_radius`
 pub fn paint_slider(ui: &Ui, rect: Rect, fraction: f32, track_height: f32, thumb_radius: f32) {
     let painter = ui.painter();
     let track = Rect::from_center_size(rect.center(), vec2(rect.width(), track_height));
@@ -47,8 +47,8 @@ pub fn paint_slider(ui: &Ui, rect: Rect, fraction: f32, track_height: f32, thumb
     let filled = Rect::from_min_max(track.min, pos2(thumb_x, track.max.y));
     painter.rect_filled(filled, CornerRadius::same(255), TEXT);
 
-    // Бегунок не вылезает за края. max/min вместо clamp: на очень узком
-    // окне левая граница может оказаться правее правой, и clamp паникует
+    // The thumb doesn't go past the edges. max/min instead of clamp: in a very narrow
+    // window the left bound may end up right of the right one, and clamp panics
     let thumb_x = thumb_x
         .min(rect.right() - thumb_radius)
         .max(rect.left() + thumb_radius);

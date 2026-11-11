@@ -1,16 +1,16 @@
-//! Картинки исполнителей. Сначала своя — файл `artist.jpg` (`.png`, `.webp`) рядом
-//! с музыкой исполнителя, так их кладут Kodi и Plex. Нет своей — фото из Deezer.
+//! Artist images. A local one comes first — an `artist.jpg` (`.png`, `.webp`) file next to
+//! the artist's music, the way Kodi and Plex place them. No local one — a photo from Deezer.
 //!
-//! Фото Deezer на диск не сохраняются: так требуют права на них. В папке данных
-//! (`artists/`) хранится только ссылка (и ответ «не найдено») — чтобы не спрашивать Deezer
-//! при каждом запуске. Сама картинка загружается по ссылке, когда она нужна на экране,
-//! и живёт только в памяти (см. `ui::covers`).
+//! Deezer photos are not saved to disk: their license requires that. The data folder
+//! (`artists/`) stores only the link (and the "not found" answer) — so Deezer isn't asked
+//! on every launch. The image itself is loaded from the link when it's needed on screen,
+//! and lives only in memory (see `ui::covers`).
 //!
-//! Вся работа — в фоновом потоке, интерфейс её не ждёт: после загрузки медиатеки в очередь
-//! встают все исполнители, и картинки появляются со временем. Исполнители на экране
-//! обрабатываются раньше остальных. К Deezer — по одному запросу, с паузой, и только
-//! если в настройках включён поиск в интернете (`set_online`). Без него фото Deezer
-//! не показываются вовсе — загрузка по ссылке тоже обращение к интернету.
+//! All work happens on a background thread, the UI doesn't wait for it: after the library loads,
+//! all artists are queued, and images appear over time. Artists on screen
+//! are processed before the rest. Deezer is queried one request at a time, with a pause, and only
+//! if online search is enabled in settings (`set_online`). Without it, Deezer photos
+//! are not shown at all — loading from a link is also an internet access.
 
 mod deezer;
 
@@ -30,77 +30,77 @@ use std::{
 use super::storage::{now_secs, stable_hash, write_atomically};
 
 const DIR_NAME: &str = "artists";
-/// 2 — вместо картинки хранится ссылка на неё. Ответы версии 1 не годятся: картинки
-/// версии 1 удаляются (`remove_stored_pictures`), и исполнителя спрашиваем заново
+/// 2 — a link to the image is stored instead of the image. Version 1 answers are no good: version 1
+/// images are deleted (`remove_stored_pictures`), and the artist is queried again
 const FORMAT_VERSION: u32 = 2;
-/// Имя своей картинки исполнителя — с одним из этих расширений
+/// A local artist image name — with one of these extensions
 const LOCAL_NAME: &str = "artist";
 const LOCAL_EXTENSIONS: [&str; 4] = ["jpg", "jpeg", "png", "webp"];
-/// «Не найдено» запоминается на столько: потом спросим снова — фото могли добавить
+/// "Not found" is remembered for this long: then ask again — a photo may have been added
 const NOT_FOUND_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
-/// Не дозвались — спросим снова не раньше чем через столько
+/// Request failed — ask again no sooner than after this long
 const FAILED_RETRY_AFTER: Duration = Duration::from_secs(5 * 60);
-/// Пауза после запроса к Deezer: у него ограничение — 50 запросов за 5 секунд
+/// Pause after a Deezer request: its limit is 50 requests per 5 seconds
 const REQUEST_GAP: Duration = Duration::from_millis(200);
 
-/// Что показать вместо заглушки
+/// What to show instead of the placeholder
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArtistImage {
-    /// Своя картинка — файл
+    /// Local image — a file
     File(PathBuf),
-    /// Фото Deezer — загрузить по ссылке, только в память
+    /// Deezer photo — load from the link, into memory only
     Url(String),
-    /// Ищется в фоне
+    /// Being looked up in the background
     Searching,
-    /// Картинки нет — заглушка
+    /// No image — placeholder
     Missing,
 }
 
-/// Исполнитель для фонового поиска
+/// An artist for the background lookup
 pub struct ArtistJob {
     pub name: String,
-    /// Папки его треков: в них ищется своя картинка
+    /// Folders of the artist's tracks: the local image is searched in them
     pub music_dirs: Vec<PathBuf>,
 }
 
-/// Найденная картинка исполнителя
+/// A found artist image
 #[derive(Debug, Clone, PartialEq)]
 enum Picture {
     File(PathBuf),
     Url(String),
 }
 
-/// Ответ Deezer в кеше — ссылка на фото, не само фото
+/// Cached Deezer answer — a link to the photo, not the photo itself
 #[derive(Serialize, Deserialize)]
 struct Cached {
     version: u32,
-    /// Когда спрашивали — секунды Unix
+    /// When it was asked — Unix seconds
     checked_at: u64,
-    /// `None` — не найдено
+    /// `None` — not found
     url: Option<String>,
 }
 
-/// Состояние исполнителя в этом запуске
+/// Artist state in this run
 enum State {
-    /// В очереди фонового потока; `urgent` — уже поставлен вперёд
+    /// In the background thread's queue; `urgent` — already moved to the front
     Queued {
         urgent: bool,
     },
     Done(Option<Picture>),
-    /// Ни своей, ни известной ссылки нет, а спросить Deezer нельзя — поиск в интернете выключен.
-    /// Включат — спросим (`set_online`)
+    /// There is neither a local image nor a known link, and Deezer can't be asked — online search is off.
+    /// Once enabled — we'll ask (`set_online`)
     Offline,
     Failed(Instant),
 }
 
-/// Ответ фонового потока об исполнителе
+/// Background thread's answer about an artist
 enum Outcome {
     Done(Option<Picture>),
     Offline,
     Failed(String),
 }
 
-/// Очередь фонового потока: сначала срочные (на экране), потом остальные
+/// Background thread queue: urgent ones (on screen) first, then the rest
 #[derive(Default)]
 struct Queue {
     urgent: VecDeque<ArtistJob>,
@@ -111,17 +111,17 @@ struct Queue {
 type Answer = (String, Outcome);
 
 pub struct ArtistImages {
-    /// По имени в нижнем регистре
+    /// Keyed by lowercase name
     states: HashMap<String, State>,
     queue: Arc<(Mutex<Queue>, Condvar)>,
     answers: Receiver<Answer>,
-    /// Можно ли спрашивать Deezer — общий с фоновым потоком
+    /// Whether Deezer may be asked — shared with the background thread
     online: Arc<AtomicBool>,
 }
 
 impl ArtistImages {
-    /// `data_dir` — папка данных (`None` — недоступна: только свои картинки). `wake` будит
-    /// приложение, когда картинка готова
+    /// `data_dir` — the data folder (`None` — unavailable: local images only). `wake` wakes
+    /// the app when an image is ready
     pub fn new(data_dir: Option<PathBuf>, wake: Arc<dyn Fn() + Send + Sync>) -> Self {
         let cache = data_dir.map(|dir| dir.join(DIR_NAME));
         let queue: Arc<(Mutex<Queue>, Condvar)> = Arc::default();
@@ -145,9 +145,9 @@ impl ArtistImages {
         }
     }
 
-    /// Разрешает или запрещает спрашивать Deezer. После включения исполнители, которых
-    /// не искали из-за выключенного поиска, снова считаются неизвестными: их можно ставить
-    /// в очередь (`prefetch`, `image`)
+    /// Allows or forbids asking Deezer. After enabling, artists that
+    /// weren't looked up because search was off are considered unknown again: they can be
+    /// queued (`prefetch`, `image`)
     pub fn set_online(&mut self, online: bool) {
         self.online.store(online, Ordering::Relaxed);
         if online {
@@ -156,8 +156,8 @@ impl ArtistImages {
         }
     }
 
-    /// Ставит в фоновую очередь всех исполнителей, о которых ещё ничего не известно, —
-    /// после загрузки или изменения медиатеки
+    /// Queues in the background all artists nothing is known about yet —
+    /// after the library is loaded or changed
     pub fn prefetch(&mut self, artists: impl IntoIterator<Item = ArtistJob>) {
         let jobs: Vec<ArtistJob> = artists
             .into_iter()
@@ -173,8 +173,8 @@ impl ArtistImages {
         self.push(jobs, false);
     }
 
-    /// Картинка исполнителя, который на экране. Ещё не готова — он встаёт в начало очереди.
-    /// `music_dirs` вызывается, только если исполнителя нужно поставить в очередь
+    /// Image of an artist on screen. Not ready yet — the artist goes to the front of the queue.
+    /// `music_dirs` is called only if the artist needs to be queued
     pub fn image(&mut self, name: &str, music_dirs: impl FnOnce() -> Vec<PathBuf>) -> ArtistImage {
         let key = key(name);
         if key.is_empty() {
@@ -184,7 +184,7 @@ impl ArtistImages {
             Some(State::Done(picture)) => {
                 return match picture {
                     Some(Picture::File(path)) => ArtistImage::File(path.clone()),
-                    // Загрузка по ссылке — обращение к интернету: только с разрешения
+                    // Loading from a link is an internet access: only with permission
                     Some(Picture::Url(url)) if self.online.load(Ordering::Relaxed) => {
                         ArtistImage::Url(url.clone())
                     }
@@ -196,7 +196,7 @@ impl ArtistImages {
             Some(State::Failed(_)) if !self.should_queue(&key) => return ArtistImage::Missing,
             _ => {}
         }
-        // Нового или ждущего в общей очереди — вперёд
+        // A new one, or one waiting in the general queue — to the front
         self.states.insert(key, State::Queued { urgent: true });
         self.push(
             vec![ArtistJob {
@@ -208,7 +208,7 @@ impl ArtistImages {
         ArtistImage::Searching
     }
 
-    /// Забирает готовые картинки. `true` — что-то пришло: стоит перерисовать
+    /// Takes the ready images. `true` — something arrived: worth redrawing
     pub fn poll(&mut self) -> bool {
         let mut arrived = false;
         while let Ok((key, outcome)) = self.answers.try_recv() {
@@ -226,7 +226,7 @@ impl ArtistImages {
         arrived
     }
 
-    /// Неизвестного или давно не дозвавшегося — можно ставить в очередь
+    /// Unknown, or failed long ago — can be queued
     fn should_queue(&self, key: &str) -> bool {
         match self.states.get(key) {
             None => true,
@@ -251,7 +251,7 @@ impl ArtistImages {
 
 impl Drop for ArtistImages {
     fn drop(&mut self) {
-        // Фоновый поток доделает текущего исполнителя и закончится
+        // The background thread finishes the current artist and exits
         let (queue, ready) = &*self.queue;
         if let Ok(mut queue) = queue.lock() {
             queue.closed = true;
@@ -264,7 +264,7 @@ fn key(name: &str) -> String {
     name.trim().to_lowercase()
 }
 
-/// Фоновый поток: берёт исполнителей из очереди по одному — сначала срочных
+/// Background thread: takes artists from the queue one by one — urgent ones first
 fn work(
     queue: &(Mutex<Queue>, Condvar),
     cache: Option<&Path>,
@@ -276,7 +276,7 @@ fn work(
         remove_stored_pictures(cache);
     }
     let (queue, ready) = queue;
-    // Кто уже обработан: исполнитель мог встать в очередь дважды — фоном и срочно
+    // Already processed: an artist could be queued twice — in the background and urgently
     let mut done: HashSet<String> = HashSet::new();
     loop {
         let job = {
@@ -306,7 +306,7 @@ fn work(
         }
         let online = online.load(Ordering::Relaxed);
         let (outcome, asked_deezer) = find_image(&key, &job.music_dirs, cache, online);
-        // Не дозвались или не спрашивали — в следующий раз можно снова
+        // Request failed or wasn't made — can try again next time
         if matches!(outcome, Outcome::Done(_)) {
             done.insert(key.clone());
         }
@@ -320,8 +320,8 @@ fn work(
     }
 }
 
-/// Картинка исполнителя: своя, из кеша или — если `online` — из Deezer. Второе значение —
-/// спрашивали ли Deezer: после запроса нужна пауза
+/// Artist image: local, cached, or — if `online` — from Deezer. The second value is
+/// whether Deezer was asked: a pause is needed after a request
 fn find_image(
     key: &str,
     music_dirs: &[PathBuf],
@@ -347,7 +347,7 @@ fn find_image(
     (outcome, true)
 }
 
-/// Своя картинка исполнителя в одной из папок `dirs`
+/// Local artist image in one of the `dirs` folders
 fn find_local(dirs: &[PathBuf]) -> Option<PathBuf> {
     dirs.iter()
         .flat_map(|dir| {
@@ -358,13 +358,13 @@ fn find_local(dirs: &[PathBuf]) -> Option<PathBuf> {
         .find(|path| path.is_file())
 }
 
-/// Файл кеша исполнителя: ответ Deezer
+/// Artist cache file: the Deezer answer
 fn cache_file(dir: &Path, key: &str) -> PathBuf {
     dir.join(format!("{:016x}.json", stable_hash(key)))
 }
 
-/// Ответ из кеша: `Some(Some(ссылка))`, `Some(None)` — «не найдено», пока не устарело;
-/// `None` — в кеше ничего нет (или устарело, или старой версии)
+/// Cached answer: `Some(Some(link))`, `Some(None)` — "not found", until stale;
+/// `None` — nothing in cache (or stale, or from an old version)
 fn read_cached(dir: &Path, key: &str) -> Option<Option<String>> {
     let text = fs::read_to_string(cache_file(dir, key)).ok()?;
     let cached: Cached = serde_json::from_str(&text).ok()?;
@@ -378,7 +378,7 @@ fn read_cached(dir: &Path, key: &str) -> Option<Option<String>> {
     (age < NOT_FOUND_TTL.as_secs()).then_some(None)
 }
 
-/// Спрашивает Deezer и сохраняет в кеш ответ — ссылку на фото, не само фото
+/// Asks Deezer and caches the answer — a link to the photo, not the photo itself
 fn fetch_and_store(dir: &Path, key: &str) -> Result<Option<String>, String> {
     let url = deezer::find_picture(key)?;
     let cached = Cached {
@@ -390,7 +390,7 @@ fn fetch_and_store(dir: &Path, key: &str) -> Result<Option<String>, String> {
     Ok(url)
 }
 
-/// Удаляет фото, которые сохраняла версия 1: хранить фото Deezer на диске нельзя
+/// Deletes photos saved by version 1: storing Deezer photos on disk is not allowed
 fn remove_stored_pictures(dir: &Path) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
@@ -408,7 +408,7 @@ mod tests {
     use crate::core::storage::{now_secs, write_atomically};
     use std::{fs, sync::Arc, time::Duration};
 
-    /// Ждёт, пока фоновый поток ответит про `name`
+    /// Waits until the background thread answers about `name`
     fn wait(images: &mut ArtistImages, name: &str) -> ArtistImage {
         for _ in 0..2000 {
             images.poll();
@@ -428,8 +428,8 @@ mod tests {
         fs::create_dir_all(&music).unwrap();
         fs::write(music.join("artist.png"), b"png").unwrap();
 
-        // В кеше — ссылка на фото одного исполнителя, «не найдено» другого и фото,
-        // сохранённое старой версией: его быть не должно
+        // The cache holds a photo link for one artist, "not found" for another, and a photo
+        // saved by the old version: it must not be there
         let data = root.join("data");
         let cache = data.join("artists");
         fs::create_dir_all(&cache).unwrap();
@@ -453,19 +453,19 @@ mod tests {
             wait(&mut images, "Artist"),
             ArtistImage::File(music.join("artist.png"))
         );
-        // Поиск в интернете выключен (так по умолчанию): фото Deezer не показываем
-        // и Deezer не спрашиваем
+        // Online search is off (the default): Deezer photos are not shown
+        // and Deezer is not asked
         assert_eq!(wait(&mut images, "HIM"), ArtistImage::Missing);
         assert_eq!(wait(&mut images, "Unknown Artist"), ArtistImage::Missing);
         assert!(!old_picture.exists());
 
-        // Включили — известная ссылка показывается сразу, без запроса
+        // Enabled — a known link is shown right away, without a request
         images.set_online(true);
         assert_eq!(
             images.image("HIM", Vec::new),
             ArtistImage::Url("https://cdn/him.jpg".into())
         );
-        // «Не найдено» из кеша — тоже без запроса
+        // "Not found" from the cache — also without a request
         assert_eq!(wait(&mut images, "Nobody"), ArtistImage::Missing);
         drop(images);
         fs::remove_dir_all(root).unwrap();

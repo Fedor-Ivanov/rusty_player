@@ -1,5 +1,5 @@
-//! Запись файлов данных: медиатека, плейлист и настройки хранятся JSON-файлами в папке
-//! данных приложения. Каждый модуль сам решает, что и когда сохранять, а пишет — здесь.
+//! Writing data files: the library, queue, playlists and settings are stored as JSON files in the app
+//! data folder. Each module decides what and when to save, but the writing happens here.
 
 use serde::Serialize;
 use std::{
@@ -9,8 +9,8 @@ use std::{
     thread::JoinHandle,
 };
 
-/// Пишет `value` в JSON-файл `file`: во временный файл и переименовывает его поверх старого.
-/// Если запись прервётся, старый файл останется целым, а не полузаписанным
+/// Writes `value` to JSON file `file`: into a temp file, then renames it over the old one.
+/// If writing is interrupted, the old file stays intact rather than half-written
 pub fn write_atomically(file: &Path, value: &impl Serialize) -> Result<(), String> {
     if let Some(dir) = file.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
@@ -21,25 +21,25 @@ pub fn write_atomically(file: &Path, value: &impl Serialize) -> Result<(), Strin
     fs::rename(&temp, file).map_err(|e| e.to_string())
 }
 
-/// Хеш строки для имён файлов кеша (тексты песен, картинки исполнителей) — FNV-1a.
-/// Не `DefaultHasher`: тот может считать иначе в другой версии Rust, и кеш потерялся бы
+/// String hash for cache file names (lyrics, artist images) — FNV-1a.
+/// Not `DefaultHasher`: it may compute differently in another Rust version, and the cache would be lost
 pub fn stable_hash(text: &str) -> u64 {
     text.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
         (hash ^ byte as u64).wrapping_mul(0x0000_0100_0000_01b3)
     })
 }
 
-/// Сейчас — в секундах Unix: когда спрашивали сервис, для срока жизни ответа в кеше
+/// Now — in Unix seconds: when the service was asked, for the cached answer's lifetime
 pub fn now_secs() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |since| since.as_secs())
 }
 
-/// Запись файла в фоновом потоке — для больших файлов (медиатека), чтобы интерфейс
-/// не ждал записи. Пишет по порядку; если изменения идут чаще, чем успевает запись,
-/// промежуточные состояния пропускаются — пишется последнее. При уничтожении дожидается
-/// записи всего отправленного
+/// Writing a file on a background thread — for large files (the library), so the UI
+/// doesn't wait for the write. Writes in order; if changes come faster than writing keeps up,
+/// intermediate states are skipped — the latest is written. On drop, waits for
+/// everything sent to be written
 pub struct BackgroundWriter<T> {
     jobs: Option<Sender<Job<T>>>,
     errors: Receiver<String>,
@@ -48,12 +48,12 @@ pub struct BackgroundWriter<T> {
 
 enum Job<T> {
     Write(T),
-    /// Ответить, когда всё отправленное раньше записано
+    /// Reply when everything sent earlier has been written
     Flush(Sender<()>),
 }
 
 impl<T: Serialize + Send + 'static> BackgroundWriter<T> {
-    /// `what` — что пишется, для текста ошибки: «Could not save the {what}»
+    /// `what` — what is being written, for the error text: "Could not save the {what}"
     pub fn new(file: PathBuf, what: &'static str) -> Self {
         let (jobs, inbox) = mpsc::channel::<Job<T>>();
         let (report, errors) = mpsc::channel();
@@ -63,8 +63,8 @@ impl<T: Serialize + Send + 'static> BackgroundWriter<T> {
                     let _ = report.send(format!("Could not save the {what}: {e}"));
                 }
             };
-            // Ждём задачу, затем забираем всё, что успело накопиться: из записей нужна
-            // только последняя, а просьбу дождаться выполняем после записи того, что до неё
+            // Wait for a task, then take everything that has accumulated: only the last write
+            // is needed, and a wait request is fulfilled after writing what came before it
             while let Ok(job) = inbox.recv() {
                 let mut latest = None;
                 let mut flushes = Vec::new();
@@ -94,14 +94,14 @@ impl<T: Serialize + Send + 'static> BackgroundWriter<T> {
         }
     }
 
-    /// Отправляет `value` на запись и сразу возвращается
+    /// Sends `value` to be written and returns immediately
     pub fn write(&self, value: T) {
         if let Some(jobs) = &self.jobs {
             let _ = jobs.send(Job::Write(value));
         }
     }
 
-    /// Ждёт, пока всё отправленное запишется: перед выходом и в тестах
+    /// Waits until everything sent is written: before exit and in tests
     pub fn flush(&self) {
         let (done, wait) = mpsc::channel();
         if let Some(jobs) = &self.jobs
@@ -111,7 +111,7 @@ impl<T: Serialize + Send + 'static> BackgroundWriter<T> {
         }
     }
 
-    /// Ошибка записи, если была, — для показа пользователю
+    /// Write error, if any — to show the user
     pub fn take_error(&self) -> Option<String> {
         self.errors.try_iter().last()
     }
@@ -119,7 +119,7 @@ impl<T: Serialize + Send + 'static> BackgroundWriter<T> {
 
 impl<T> Drop for BackgroundWriter<T> {
     fn drop(&mut self) {
-        // Без отправителя поток допишет оставшееся и закончится
+        // Without a sender the thread finishes writing the rest and exits
         self.jobs = None;
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
@@ -144,7 +144,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&file).unwrap(), "99");
         assert!(writer.take_error().is_none());
 
-        // При уничтожении отправленное дописывается
+        // On drop, what was sent gets written
         writer.write(7);
         drop(writer);
         assert_eq!(fs::read_to_string(&file).unwrap(), "7");

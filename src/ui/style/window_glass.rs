@@ -1,8 +1,8 @@
-//! Настоящее стекло под окном: окно прозрачное, а система размывает рабочий стол
-//! и окна за ним.
+//! Real glass under the window: the window is transparent, and the system blurs the desktop
+//! and the windows behind it.
 
-/// Включает системное размытие под окном. Если эффект недоступен, окно просто остаётся
-/// прозрачным — это не повод падать, поэтому ошибка только возвращается.
+/// Enables the system blur under the window. If the effect is unavailable, the window just stays
+/// transparent — that's no reason to crash, so the error is only returned.
 pub fn apply(cc: &eframe::CreationContext<'_>) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     return macos::apply(cc);
@@ -17,11 +17,11 @@ pub fn apply(cc: &eframe::CreationContext<'_>) -> Result<(), String> {
     }
 }
 
-/// Чем рисовать окно. На Windows — OpenGL (glow): он рисует в обычную поверхность окна,
-/// а её winit делает прозрачной, и под ней виден системный Acrylic. wgpu на Windows рисует
-/// через DX12: напрямую в окно — без прозрачности, а через DirectComposition — под
-/// поверхностью окна, которая его перекрывает (убрать её можно только флагом при создании
-/// окна, а eframe его не передаёт). На macOS — wgpu, как по умолчанию
+/// What to render the window with. On Windows — OpenGL (glow): it renders into the regular window surface,
+/// which winit makes transparent, and the system Acrylic shows under it. wgpu on Windows renders
+/// via DX12: directly into the window — without transparency, or via DirectComposition — under
+/// the window surface, which covers it (it can only be removed with a flag at window
+/// creation, and eframe doesn't pass it). On macOS — wgpu, as by default
 pub fn renderer() -> eframe::Renderer {
     #[cfg(target_os = "windows")]
     return eframe::Renderer::Glow;
@@ -29,9 +29,9 @@ pub fn renderer() -> eframe::Renderer {
     eframe::Renderer::default()
 }
 
-/// Windows: стекло — системный материал Acrylic (размывает окна и рабочий стол позади),
-/// в тёмном варианте. Не Mica: Mica не просвечивает — это почти сплошная заливка в тон
-/// обоев, а в светлой теме Windows ещё и светлая
+/// Windows: the glass is the system Acrylic material (blurs windows and the desktop behind),
+/// in the dark variant. Not Mica: Mica isn't see-through — it's an almost solid fill matching
+/// the wallpaper, and in the Windows light theme it's light too
 #[cfg(target_os = "windows")]
 mod windows {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -49,20 +49,20 @@ mod windows {
             return Err("the window is not a Win32 window".into());
         };
         let hwnd = handle.hwnd.get() as HWND;
-        // Тёмный вариант материала и заголовка — независимо от темы Windows
+        // Dark variant of the material and title bar — regardless of the Windows theme
         let _ = set_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1u32);
-        // Системный Acrylic есть в Windows 11 22H2 и новее; система рисует его сама,
-        // окно не тормозит при перетаскивании. Нет его (Windows 10) — обычное размытие:
-        // Acrylic Windows 10 заметно тормозит при перетаскивании окна
+        // System Acrylic exists in Windows 11 22H2 and newer; the system draws it itself,
+        // the window doesn't lag while dragging. Without it (Windows 10) — a regular blur:
+        // Windows 10 Acrylic noticeably lags while dragging the window
         if set_attribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_TRANSIENTWINDOW).is_ok() {
             return Ok(());
         }
         window_vibrancy::apply_blur(cc, None).map_err(|e| e.to_string())
     }
 
-    /// Атрибут окна для DWM. Ошибка — система его не знает (старая версия Windows)
+    /// A window attribute for DWM. Error — the system doesn't know it (an old Windows version)
     fn set_attribute<T>(hwnd: HWND, attribute: i32, value: T) -> Result<(), i32> {
-        // SAFETY: окно живо, `value` живёт до конца вызова, размер — его собственный
+        // SAFETY: the window is alive, `value` lives until the end of the call, the size is its own
         let result = unsafe {
             DwmSetWindowAttribute(
                 hwnd,
@@ -85,11 +85,11 @@ mod macos {
     };
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-    /// NSVisualEffectView кладётся не внутрь вью egui, а рядом — в рамку окна, под него.
-    /// Вью winit рисует egui прямо в свой слой (Metal), а AppKit всегда рисует подвью
-    /// поверх слоя родителя: размытие внутри вью egui закрыло бы весь контент
-    /// (так делает window-vibrancy — для Tauri это подходит, для egui нет).
-    /// Сам вью egui при этом остаётся на месте, так что ввод не затрагивается.
+    /// NSVisualEffectView is placed not inside the egui view but next to it — in the window frame, under it.
+    /// The winit view draws egui directly into its layer (Metal), and AppKit always draws subviews
+    /// on top of the parent's layer: a blur inside the egui view would cover all the content
+    /// (window-vibrancy does that — fine for Tauri, not for egui).
+    /// The egui view itself stays in place, so input is unaffected.
     pub fn apply(cc: &eframe::CreationContext<'_>) -> Result<(), String> {
         let mtm = MainThreadMarker::new()
             .ok_or("window blur can only be enabled from the main thread")?;
@@ -98,22 +98,22 @@ mod macos {
         let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
             return Err("the window is not an AppKit window".into());
         };
-        // SAFETY: вью принадлежит окну, которое живо всё время работы приложения
+        // SAFETY: the view belongs to the window, which is alive for the whole app lifetime
         let content_view: &NSView = unsafe { handle.ns_view.cast().as_ref() };
-        // SAFETY: рамка окна живёт столько же, сколько окно
+        // SAFETY: the window frame lives as long as the window
         let frame_view =
             unsafe { content_view.superview() }.ok_or("the window view has no frame view")?;
 
         let blur = NSVisualEffectView::initWithFrame(mtm.alloc(), frame_view.bounds());
-        // HUDWindow — тёмный материал под тёмную тему
+        // HUDWindow — a dark material for the dark theme
         blur.setMaterial(NSVisualEffectMaterial::HUDWindow);
-        // Тёмное оформление принудительно, как у виджетов macOS: иначе материал следует
-        // системной теме и в светлой теме становится светлым, молочным
-        // SAFETY: системная константа, доступна всё время работы приложения
+        // Dark appearance is forced, like macOS widgets: otherwise the material follows
+        // the system theme and becomes light and milky in the light theme
+        // SAFETY: a system constant, available for the whole app lifetime
         let dark = NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua });
         blur.setAppearance(dark.as_deref());
         blur.setBlendingMode(NSVisualEffectBlendingMode::BehindWindow);
-        // Active — размытие не гаснет, когда окно не в фокусе
+        // Active — the blur doesn't fade when the window is out of focus
         blur.setState(NSVisualEffectState::Active);
         blur.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewWidthSizable

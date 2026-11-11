@@ -1,14 +1,14 @@
-//! Поиск на страницах медиатеки: запрос и найденные песни.
+//! Search on library pages: the query and found songs.
 
 use crate::{core::library::Track, ui::app::PlayerApp};
 
-/// Поиск в виде библиотеки. Запрос один на открытый вид: при смене вида он очищается
-/// (см. `PlayerApp::navigate`). Artists ищет по имени исполнителя, Albums — по названию
-/// альбома, Songs — по названию трека и имени исполнителя
+/// Search in a library view. One query per open view: it's cleared when the view changes
+/// (see `PlayerApp::navigate`). Artists searches by artist name, Albums — by album
+/// title, Songs — by track title and artist name
 #[derive(Default)]
 pub(crate) struct LibrarySearch {
     pub(crate) query: String,
-    /// Найденные треки Songs; `None` — запрос пуст, показана вся библиотека
+    /// Tracks found in Songs; `None` — the query is empty, the whole library is shown
     pub(crate) found_songs: Option<FoundSongs>,
 }
 
@@ -18,31 +18,31 @@ impl LibrarySearch {
     }
 }
 
-/// Треки, найденные в Songs. Пересчитываются, только когда изменился запрос или библиотека:
-/// в библиотеке могут быть десятки тысяч треков, а кадры рисуются постоянно
+/// Tracks found in Songs. Recomputed only when the query or the library changed:
+/// the library may have tens of thousands of tracks, and frames are drawn constantly
 pub(crate) struct FoundSongs {
     pub(crate) revision: u64,
-    /// Запрос в нижнем регистре, по которому искали
+    /// The lowercase query that was searched for
     pub(crate) query: String,
-    /// Номера найденных треков в библиотеке
+    /// Library indices of the found tracks
     pub(crate) indices: Vec<usize>,
-    /// Копии найденных треков — их показывает список
+    /// Copies of the found tracks — the list shows them
     pub(crate) tracks: Vec<Track>,
 }
 
-/// Запрос поиска для сравнения: без пробелов по краям, в нижнем регистре
+/// Search query for comparison: trimmed, lowercase
 pub(crate) fn normalized_query(query: &str) -> String {
     query.trim().to_lowercase()
 }
 
-/// Есть ли `query` (уже из `normalized_query`) в `text` без учёта регистра.
-/// Пустой запрос подходит ко всему
+/// Whether `query` (already from `normalized_query`) is in `text`, case-insensitive.
+/// An empty query matches everything
 pub(crate) fn contains_query(text: &str, query: &str) -> bool {
     query.is_empty() || text.to_lowercase().contains(query)
 }
 
 impl PlayerApp {
-    /// Пересчитывает найденные в Songs треки, если изменился запрос или библиотека
+    /// Recomputes the tracks found in Songs if the query or the library changed
     pub(crate) fn refresh_found_songs(&mut self) {
         let query = normalized_query(&self.search.query);
         if query.is_empty() {

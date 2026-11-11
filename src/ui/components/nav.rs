@@ -1,4 +1,4 @@
-//! Пункты навигации (меню библиотеки) и плашка текущего трека.
+//! Navigation items (library menu) and the current track bar.
 
 use eframe::egui::{self, Align2, CursorIcon, FontId, Response, RichText, Sense, Ui, pos2, vec2};
 
@@ -11,8 +11,8 @@ const NAV_ITEM_PADDING: f32 = 10.0;
 pub const NOW_PLAYING_BAR_HEIGHT: f32 = 52.0;
 const NOW_PLAYING_BAR_PADDING: f32 = 14.0;
 
-/// Пункт навигации во всю ширину: при наведении плавно подсвечивается, выбранный —
-/// подсвечен как играющий трек в списке
+/// Full-width navigation item: smoothly highlights on hover, the selected one is
+/// highlighted like the playing track in the list
 pub fn nav_item(ui: &mut Ui, id_salt: &str, label: &str, selected: bool) -> Response {
     let (rect, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), NAV_ITEM_HEIGHT), Sense::hover());
@@ -47,10 +47,10 @@ pub fn nav_item(ui: &mut Ui, id_salt: &str, label: &str, selected: bool) -> Resp
     response
 }
 
-/// Плашка текущего трека во всю ширину: название и исполнитель. Кликабельна целиком.
-/// Текст рисуется прямо на плашке, а не виджетами `Label`: обрезанный `Label` сам ловит
-/// наведение (ради подсказки с полным текстом) и отнимал бы его у плашки — подсветка
-/// мигала бы, пока курсор переходит с текста на пустое место
+/// Full-width current track bar: title and artist. Clickable as a whole.
+/// The text is painted directly on the bar rather than with `Label` widgets: a truncated `Label` catches
+/// hover itself (for the full-text tooltip) and would steal it from the bar — the highlight
+/// would flicker as the cursor moves from text to empty space
 pub fn now_playing_bar(ui: &mut Ui, title: &str, subtitle: &str) -> Response {
     let (rect, _) = ui.allocate_exact_size(
         vec2(ui.available_width(), NOW_PLAYING_BAR_HEIGHT),
@@ -70,7 +70,7 @@ pub fn now_playing_bar(ui: &mut Ui, title: &str, subtitle: &str) -> Response {
     ui.painter()
         .rect_filled(rect, 12, HIGHLIGHT.lerp_to_gamma(HIGHLIGHT_STRONG, hover));
 
-    // Строка, обрезанная с «…» по ширине плашки
+    // A line truncated with "…" to the bar width
     const LINE_GAP: f32 = 2.0;
     let text_width = rect.width() - 2.0 * NOW_PLAYING_BAR_PADDING;
     let line = |text: &str, size: f32, color| {
@@ -84,7 +84,7 @@ pub fn now_playing_bar(ui: &mut Ui, title: &str, subtitle: &str) -> Response {
     let title = line(title, 15.0, TEXT);
     let subtitle = (!subtitle.is_empty()).then(|| line(subtitle, 13.0, TEXT_MUTED));
 
-    // Блок строк — по центру плашки по высоте
+    // The block of lines — vertically centered in the bar
     let block_height = title.size().y
         + subtitle
             .as_ref()

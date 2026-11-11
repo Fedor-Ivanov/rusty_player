@@ -1,4 +1,4 @@
-//! Сохранённые плейлисты сеткой: обложка (по первым трекам), название и число треков.
+//! Saved playlists as a grid: cover (from the first tracks), title and track count.
 
 use eframe::egui::{Align, Ui};
 use std::path::PathBuf;
@@ -20,28 +20,28 @@ use crate::{
     },
 };
 
-/// Обложку плейлиста ищем среди стольких первых его треков
+/// The playlist cover is searched among this many of its first tracks
 pub(crate) const PLAYLIST_COVER_TRACKS: usize = 8;
 
-/// Пункт контекстного меню плейлиста
+/// Playlist context menu item
 enum PlaylistMenuItem {
     Play,
     Rename,
-    /// Удалить выделенные плейлисты — один или несколько
+    /// Delete the selected playlists — one or several
     Delete,
 }
 
 impl PlayerApp {
-    /// Все сохранённые плейлисты сеткой. Клик открывает плейлист, кнопка на обложке играет
-    /// его; из меню — сыграть, переименовать, удалить. Если выделено несколько — меню только
-    /// удаляет их все
+    /// All saved playlists as a grid. A click opens a playlist, the button on the cover plays
+    /// it; from the menu — play, rename, delete. If several are selected — the menu only
+    /// deletes them all
     pub(crate) fn render_playlists(&mut self, ui: &mut Ui) {
         let all = self.core.playlists.all();
         if all.is_empty() {
             placeholder(ui, t().no_playlists);
             return;
         }
-        // Поиск — по названию
+        // Search — by title
         let query = normalized_query(&self.search.query);
         let shown: Vec<usize> = (0..all.len())
             .filter(|&index| contains_query(&all[index].name, &query))
@@ -50,8 +50,8 @@ impl PlayerApp {
             placeholder(ui, t().no_results);
             return;
         }
-        // Номера плиток относятся к плейлистам и запросу — при их изменении выделение
-        // сбрасывается
+        // Tile indices belong to the playlists and the query — when they change the selection
+        // is reset
         self.playlists_grid
             .set_scope(&format!("{}/{query}", self.core.playlists.revision()));
 
@@ -68,7 +68,7 @@ impl PlayerApp {
                 let candidates = cover_candidates(&playlist.tracks);
                 let cover = covers.get(&candidates, CoverSize::Thumbnail);
                 components::paint_cover(ui, image_rect, cover, TILE_RADIUS);
-                // Кнопка play на обложке — как у альбомов; у пустого плейлиста играть нечего
+                // The play button on the cover — like for albums; an empty playlist has nothing to play
                 if !playlist.tracks.is_empty()
                     && overlay_play_button(ui, image_rect, tile, &format!("play_playlist {index}"))
                 {
@@ -89,7 +89,7 @@ impl PlayerApp {
                 ]
             },
         );
-        // Соседние с экраном ряды — заранее: при прокрутке обложки уже будут готовы
+        // Rows next to the screen — in advance: covers will be ready when scrolling
         for index in self.playlists_grid.nearby() {
             covers.prefetch(
                 &cover_candidates(&all[shown[index]].tracks),
@@ -101,8 +101,8 @@ impl PlayerApp {
         }
 
         let id_of = |index: usize| all[shown[index]].id;
-        // Меню по правому клику и Delete действуют на выделение: правый клик выделяет
-        // плитку под курсором, если она не была выделена
+        // The right-click menu and Delete act on the selection: a right click selects
+        // the tile under the cursor if it wasn't selected
         let selected = || {
             self.playlists_grid
                 .selection()
@@ -129,7 +129,7 @@ impl PlayerApp {
     }
 }
 
-/// Где искать обложку плейлиста: его первые треки
+/// Where to look for the playlist cover: its first tracks
 pub(crate) fn cover_candidates(tracks: &[crate::core::library::Track]) -> Vec<PathBuf> {
     tracks
         .iter()
@@ -138,8 +138,8 @@ pub(crate) fn cover_candidates(tracks: &[crate::core::library::Track]) -> Vec<Pa
         .collect()
 }
 
-/// Контекстное меню плейлиста. Выделен один — сыграть, переименовать, удалить его;
-/// несколько — только удалить их все: сыграть или переименовать сразу несколько нельзя
+/// Playlist context menu. One selected — play, rename, delete it;
+/// several — only delete them all: several can't be played or renamed at once
 fn playlist_context_menu(tile: &components::Tile) -> Option<PlaylistMenuItem> {
     let mut chosen = None;
     tile.response.context_menu(|ui| {

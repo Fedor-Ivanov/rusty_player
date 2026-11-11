@@ -1,5 +1,5 @@
-//! Окна сохранённых плейлистов: название (сохранить очередь, новый плейлист,
-//! переименовать) и подтверждение удаления.
+//! Saved playlist dialogs: name (save queue, new playlist,
+//! rename) and delete confirmation.
 
 use eframe::egui::{self, Align, Key, Label, Layout, RichText, TextEdit};
 
@@ -16,22 +16,22 @@ use crate::{
 
 const DIALOG_WIDTH: f32 = 340.0;
 
-/// Окно названия плейлиста — пока оно открыто
+/// Playlist name dialog — while it's open
 pub(crate) struct NameDialog {
     pub(crate) purpose: NamePurpose,
-    /// Что введено в поле
+    /// What's typed in the field
     pub(crate) name: String,
-    /// Курсор ставится в поле один раз, при открытии
+    /// The cursor is placed in the field once, on opening
     focused: bool,
 }
 
-/// Зачем спрашиваем название
+/// Why the name is asked for
 pub(crate) enum NamePurpose {
-    /// Сохранить очередь как плейлист
+    /// Save the queue as a playlist
     SaveQueue,
-    /// Новый плейлист из треков медиатеки (их номера)
+    /// A new playlist from library tracks (their indices)
     NewPlaylist(Vec<usize>),
-    /// Переименовать плейлист
+    /// Rename a playlist
     Rename(PlaylistId),
 }
 
@@ -46,8 +46,8 @@ impl NameDialog {
 }
 
 impl PlayerApp {
-    /// Окно названия плейлиста. «Save» (или Enter) отправляет действие по цели окна;
-    /// пустое название сохранить нельзя. «Cancel», Esc и клик мимо закрывают окно
+    /// Playlist name dialog. "Save" (or Enter) sends the action for the dialog's purpose;
+    /// an empty name can't be saved. "Cancel", Esc and a click outside close the dialog
     pub(crate) fn render_playlist_name_dialog(&mut self, ctx: &egui::Context) {
         let Some(dialog) = &mut self.name_dialog else {
             return;
@@ -76,7 +76,7 @@ impl PlayerApp {
                 dialog.focused = true;
             }
             let has_name = !dialog.name.trim().is_empty();
-            // Enter в поле — то же, что «Save»
+            // Enter in the field — same as "Save"
             if field.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)) && has_name {
                 save = true;
             }
@@ -84,7 +84,7 @@ impl PlayerApp {
             ui.add_space(18.0);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
-                // В right_to_left первой добавляется самая правая кнопка
+                // In right_to_left the rightmost button is added first
                 ui.add_enabled_ui(has_name, |ui| {
                     if components::pill_button(ui, t().save, ButtonStyle::Primary).clicked() {
                         save = true;
@@ -108,10 +108,10 @@ impl PlayerApp {
         }
     }
 
-    /// Подтверждение удаления плейлистов — пока ждём ответа. Один плейлист называется
-    /// по имени, несколько — числом
+    /// Playlist deletion confirmation — while waiting for an answer. A single playlist is named
+    /// by name, several — by count
     pub(crate) fn render_playlist_deletion_dialog(&mut self, ctx: &egui::Context) {
-        // Уже удалённые (например, на другой странице) не считаем
+        // Already deleted ones (e.g. on another page) aren't counted
         let playlists = &self.core.playlists;
         self.pending_playlist_deletion
             .retain(|&id| playlists.get(id).is_some());

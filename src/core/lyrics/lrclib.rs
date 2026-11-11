@@ -1,6 +1,6 @@
-//! Запрос текста песни в LRCLIB (https://lrclib.net) — открытой базе текстов, без ключей.
-//! Трек ищется по сигнатуре: исполнитель, название, альбом и длительность (сервис допускает
-//! расхождение длительности в пару секунд).
+//! Lyrics request to LRCLIB (https://lrclib.net) — an open lyrics database, no keys.
+//! A track is looked up by signature: artist, title, album and duration (the service tolerates
+//! a duration mismatch of a couple of seconds).
 
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +9,7 @@ use crate::core::net;
 const GET_URL: &str = "https://lrclib.net/api/get";
 const SEARCH_URL: &str = "https://lrclib.net/api/search";
 
-/// По чему ищется трек
+/// What the track is looked up by
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TrackSignature {
     pub artist: String,
@@ -18,20 +18,20 @@ pub struct TrackSignature {
     pub duration_secs: u64,
 }
 
-/// Ответ LRCLIB, как он хранится в кеше
+/// LRCLIB answer as stored in the cache
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Remote {
     Found {
-        /// Синхронизированный текст в формате LRC
+        /// Synced lyrics in LRC format
         synced: Option<String>,
         plain: Option<String>,
-        /// Трек без слов
+        /// Instrumental track
         instrumental: bool,
     },
     NotFound,
 }
 
-/// Запись LRCLIB — только нужные поля. Так отвечают и `/api/get`, и `/api/search` (списком)
+/// An LRCLIB record — only the needed fields. Both `/api/get` and `/api/search` (as a list) answer this way
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Track {
@@ -39,7 +39,7 @@ struct Track {
     track_name: String,
     #[serde(default)]
     artist_name: String,
-    /// Секунды
+    /// Seconds
     #[serde(default)]
     duration: f64,
     #[serde(default)]
@@ -48,13 +48,13 @@ struct Track {
     synced_lyrics: Option<String>,
 }
 
-/// Наибольшее расхождение длительности у записи из поиска — столько же допускает `/api/get`
+/// Max duration mismatch for a search record — the same as `/api/get` tolerates
 const DURATION_TOLERANCE_SECS: f64 = 2.0;
 
-/// Спрашивает LRCLIB о треке: сначала точной сигнатурой (`/api/get`), а не нашлось —
-/// поиском по исполнителю и названию: альбом в тегах часто назван иначе, чем в LRCLIB
-/// («… (Limited Edition)»). Ошибка — сеть, сервер занят (503) и прочее временное:
-/// такой ответ не запоминается, его можно спросить снова
+/// Asks LRCLIB about a track: first by exact signature (`/api/get`), and if not found —
+/// by searching artist and title: the album in tags is often named differently than in LRCLIB
+/// ("… (Limited Edition)"). Error — network, server busy (503) and other temporary failures:
+/// such an answer is not remembered, it can be asked again
 pub fn fetch(signature: &TrackSignature) -> Result<Remote, String> {
     let agent = net::agent();
 
@@ -79,7 +79,7 @@ pub fn fetch(signature: &TrackSignature) -> Result<Remote, String> {
     Ok(best_match(candidates, signature).map_or(Remote::NotFound, found))
 }
 
-/// Тело ответа: `None` — 404, ошибка — всё, кроме 200 и 404
+/// Response body: `None` — 404, error — anything except 200 and 404
 fn read<T: serde::de::DeserializeOwned>(
     response: Result<ureq::http::Response<ureq::Body>, ureq::Error>,
 ) -> Result<Option<T>, String> {
@@ -104,10 +104,10 @@ fn found(track: Track) -> Remote {
     }
 }
 
-/// Запись из поиска, которая точно про этот трек: то же название и исполнитель (без учёта
-/// регистра), длительность — в пределах `DURATION_TOLERANCE_SECS`. Поиск нечёткий,
-/// и без этих проверок можно показать текст другой песни. Из подходящих — с синхронизированным
-/// текстом, затем с ближайшей длительностью
+/// A search record that is definitely about this track: same title and artist (case-
+/// insensitive), duration within `DURATION_TOLERANCE_SECS`. The search is fuzzy,
+/// and without these checks another song's lyrics could be shown. Among matches — ones with synced
+/// lyrics first, then the closest duration
 fn best_match(candidates: Vec<Track>, signature: &TrackSignature) -> Option<Track> {
     let same = |a: &str, b: &str| a.trim().to_lowercase() == b.trim().to_lowercase();
     let duration = signature.duration_secs as f64;
@@ -156,11 +156,11 @@ mod tests {
             duration_secs: 217,
         };
         let candidates = vec![
-            // Другая песня, другой исполнитель, далёкая длительность — не подходят
+            // Different song, different artist, distant duration — not a match
             track("Join Me", "HIM", 217.0, true),
             track("Join Me In Death", "HIM - Topic", 217.0, true),
             track("Join Me In Death", "HIM", 222.0, true),
-            // Подходят: без синхронизированного текста и с ним чуть дальше по длительности
+            // Matches: without synced lyrics, and with them but slightly farther in duration
             track("Join Me In Death", "HIM", 217.0, false),
             track("Join Me in Death", "Him", 218.0, true),
         ];

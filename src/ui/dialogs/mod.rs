@@ -1,4 +1,4 @@
-//! Модальные окна поверх приложения.
+//! Modal windows over the app.
 
 pub mod playlist;
 pub mod remove;

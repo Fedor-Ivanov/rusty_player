@@ -1,25 +1,25 @@
-//! Выделение в списках треков и сетках плиток: клики с модификаторами и выделение
-//! областью мыши.
+//! Selection in track lists and tile grids: clicks with modifiers and mouse marquee
+//! selection.
 
 use eframe::egui::{self, Pos2};
 use std::collections::BTreeSet;
 
-/// Выделение областью мыши. Начало хранится в координатах содержимого (списка или сетки),
-/// а не экрана: пока тянут, содержимое может прокручиваться, и экранная точка начала
-/// уезжает вместе с ним
+/// Mouse marquee selection. The start is stored in content coordinates (list or grid),
+/// not screen ones: while dragging, the content may scroll, and the start point on screen
+/// moves along with it
 pub(super) struct Marquee {
     pub(super) start: Pos2,
-    /// Что было выделено до начала (с ⌘/Ctrl область добавляется к нему)
+    /// What was selected before starting (with ⌘/Ctrl the area is added to it)
     pub(super) base: BTreeSet<usize>,
 }
 
-/// Выделение — как в Finder: клик выделяет один элемент, ⌘/Ctrl+клик добавляет или убирает
-/// элемент, Shift+клик выделяет диапазон от последнего клика. Элементы — номера строк
-/// списка или плиток сетки
+/// Selection like in Finder: a click selects one item, ⌘/Ctrl+click adds or removes
+/// an item, Shift+click selects a range from the last click. Items are list row
+/// indices or grid tiles
 #[derive(Default)]
 pub(super) struct Selection {
     indices: BTreeSet<usize>,
-    /// Откуда считается диапазон при Shift+клике
+    /// Where the range starts on Shift+click
     anchor: Option<usize>,
 }
 
@@ -28,7 +28,7 @@ impl Selection {
         if modifiers.shift
             && let Some(anchor) = self.anchor
         {
-            // ⌘/Ctrl вместе с Shift добавляет диапазон к уже выделенному
+            // ⌘/Ctrl together with Shift adds the range to the existing selection
             if !modifiers.command {
                 self.indices.clear();
             }
@@ -44,8 +44,8 @@ impl Selection {
         }
     }
 
-    /// Выделение областью: `base` плюс строки `range`. `anchor` — строка, с которой начали
-    /// тянуть: от неё считается диапазон при следующем Shift+клике
+    /// Marquee selection: `base` plus rows `range`. `anchor` — the row where dragging
+    /// started: the range on the next Shift+click is counted from it
     pub(super) fn select_range(
         &mut self,
         base: &BTreeSet<usize>,
@@ -55,8 +55,8 @@ impl Selection {
         self.select_many(base, range, anchor);
     }
 
-    /// Выделение областью в сетке: `base` плюс плитки `items` — рамка захватывает
-    /// прямоугольник плиток, а не диапазон подряд. `anchor` — как у `select_range`
+    /// Marquee selection in a grid: `base` plus tiles `items` — the frame captures
+    /// a rectangle of tiles, not a contiguous range. `anchor` — as in `select_range`
     pub(super) fn select_many(
         &mut self,
         base: &BTreeSet<usize>,
@@ -126,7 +126,7 @@ mod tests {
         selection.click(5, Modifiers::NONE);
         selection.click(2, Modifiers::SHIFT);
         assert_eq!(selected(&selection), [2, 3, 4, 5]);
-        // Якорь остаётся на 5: новый Shift+клик заменяет диапазон, а не расширяет его
+        // The anchor stays at 5: a new Shift+click replaces the range rather than extending it
         selection.click(7, Modifiers::SHIFT);
         assert_eq!(selected(&selection), [5, 6, 7]);
     }
@@ -149,20 +149,20 @@ mod tests {
         let base = [0, 9].into_iter().collect();
         selection.select_range(&base, 4..=5, 4);
         assert_eq!(selected(&selection), [0, 4, 5, 9]);
-        // Shift+клик после области считает диапазон от строки, с которой её начали тянуть
+        // Shift+click after a marquee counts the range from the row where dragging started
         selection.click(7, Modifiers::SHIFT);
         assert_eq!(selected(&selection), [4, 5, 6, 7]);
     }
 
     #[test]
     fn grid_marquee_selects_rectangle_of_tiles() {
-        // Сетка 4 колонки: рамка задела колонки 1–2 в строках 0–1 — это плитки 1, 2, 5, 6,
-        // не диапазон 1..=6
+        // A 4-column grid: the frame touched columns 1–2 in rows 0–1 — that's tiles 1, 2, 5, 6,
+        // not the range 1..=6
         let mut selection = Selection::default();
         selection.select_many(&Default::default(), [1, 2, 5, 6], 1);
         assert_eq!(selected(&selection), [1, 2, 5, 6]);
 
-        // С ⌘ рамка добавляется к уже выделенному
+        // With ⌘ the frame is added to the existing selection
         let base = [9].into_iter().collect();
         selection.select_many(&base, [1, 5], 1);
         assert_eq!(selected(&selection), [1, 5, 9]);

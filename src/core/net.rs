@@ -1,8 +1,8 @@
-//! HTTP для онлайн-сервисов: тексты песен (LRCLIB), картинки исполнителей (Deezer).
+//! HTTP for online services: lyrics (LRCLIB), artist images (Deezer).
 
 use std::time::Duration;
 
-/// Сервисы просят, чтобы приложение представлялось: название, версия и ссылка
+/// Services ask the app to identify itself: name, version and link
 const USER_AGENT: &str = concat!(
     "LMP ",
     env!("CARGO_PKG_VERSION"),
@@ -10,8 +10,8 @@ const USER_AGENT: &str = concat!(
 );
 const TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Клиент с общими настройками. Коды ответа — не ошибки: 404 у сервисов значит
-/// «не найдено», его разбирает вызывающий
+/// A client with shared settings. Status codes are not errors: 404 from the services means
+/// "not found", the caller handles it
 pub fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))
