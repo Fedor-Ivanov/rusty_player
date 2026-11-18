@@ -3,6 +3,10 @@
 //! right away (see `Destination::Play`).
 //!
 //! - Windows, Linux, a terminal: the paths come as command line arguments.
+//! - Windows: Explorer starts a new process for every opened file, even when LMP is already
+//!   running. Such a process hands its files over to the running one (`WM_COPYDATA`) and exits —
+//!   otherwise a second player would start. The installer lists LMP in "Open with" for the
+//!   audio types (`installer/windows.nsi`).
 //! - macOS: Finder doesn't pass arguments — it sends the "open documents" Apple event, both at
 //!   launch and to an app that is already running. winit doesn't handle it, so we install our own
 //!   handler. The Info.plist must also list the audio types (`CFBundleDocumentTypes`,
@@ -30,15 +34,26 @@ pub fn install() {
         // Old macOS versions pass the process serial number (`-psn_0_12345`) to apps started by Finder
         .filter(|path| !path.to_string_lossy().starts_with("-psn_"))
         .filter(|path| path.exists());
-    push(args.collect());
+    let paths: Vec<PathBuf> = args.collect();
+
+    #[cfg(target_os = "windows")]
+    if windows::hand_over_to_running(&paths) {
+        std::process::exit(0);
+    }
+
+    push(paths);
 
     #[cfg(target_os = "macos")]
     macos::install();
 }
 
-/// The app is created: from now on, files opened later wake it right away
-pub(crate) fn set_context(ctx: &egui::Context) {
-    let _ = CONTEXT.set(ctx.clone());
+/// The app window is created: from now on, files opened later wake the app right away
+/// (on Windows — and they are accepted from other LMP processes)
+pub(crate) fn attach(cc: &eframe::CreationContext) {
+    let _ = CONTEXT.set(cc.egui_ctx.clone());
+
+    #[cfg(target_os = "windows")]
+    windows::receive_files(cc);
 }
 
 /// Files opened since the previous call
@@ -152,5 +167,181 @@ mod macos {
         // Neither the notification center nor the Apple event manager retain the handler —
         // it must live as long as the app
         let _: *mut AnyObject = Retained::into_raw(handler).cast();
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod windows {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use std::{
+        ffi::OsString,
+        os::windows::ffi::{OsStrExt, OsStringExt},
+        path::PathBuf,
+        ptr,
+        time::{Duration, Instant},
+    };
+    use windows_sys::{
+        Win32::{
+            Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HWND, LPARAM, LRESULT, WPARAM},
+            System::{DataExchange::COPYDATASTRUCT, Threading::CreateMutexW},
+            UI::{
+                Shell::{DefSubclassProc, SetWindowSubclass},
+                WindowsAndMessaging::{
+                    ChangeWindowMessageFilterEx, EnumWindows, GetPropW, IsIconic, MSGFLT_ALLOW,
+                    SMTO_ABORTIFHUNG, SW_RESTORE, SendMessageTimeoutW, SetForegroundWindow,
+                    SetPropW, ShowWindow, WM_COPYDATA,
+                },
+            },
+        },
+        core::BOOL,
+    };
+
+    /// Exists while some LMP process is running — a new process finds out it isn't the first
+    const INSTANCE_MUTEX: &str = "Local\\LMP.instance";
+    /// A mark on the LMP window: other processes find it by this property
+    const WINDOW_PROP: &str = "LMP.OpenFiles";
+    /// `WM_COPYDATA` kind: a list of paths, UTF-16, separated by zeros
+    const OPEN_FILES: usize = 0x4c4d_5001;
+    /// How long a new process waits for the window of the running one: when several files are
+    /// opened at once, Explorer starts all the processes together, and the first one's window
+    /// isn't there yet
+    const WAIT_FOR_WINDOW: Duration = Duration::from_secs(5);
+    const SEND_TIMEOUT_MS: u32 = 5000;
+
+    fn wide(text: &str) -> Vec<u16> {
+        text.encode_utf16().chain(Some(0)).collect()
+    }
+
+    /// If LMP is already running, gives it `paths`, brings its window to the front and returns `true` —
+    /// then this process isn't needed. Without files a second window opens as before
+    pub(super) fn hand_over_to_running(paths: &[PathBuf]) -> bool {
+        let name = wide(INSTANCE_MUTEX);
+        // SAFETY: the name is a zero-terminated string; the mutex is kept until the process exits
+        let first = unsafe {
+            let mutex = CreateMutexW(ptr::null(), 0, name.as_ptr());
+            mutex.is_null() || GetLastError() != ERROR_ALREADY_EXISTS
+        };
+        if first || paths.is_empty() {
+            return false;
+        }
+
+        let started = Instant::now();
+        let window = loop {
+            if let Some(window) = find_window() {
+                break window;
+            }
+            if started.elapsed() >= WAIT_FOR_WINDOW {
+                // The running one didn't show a window (hung or is exiting) — open here
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        };
+
+        let mut data: Vec<u16> = Vec::new();
+        for path in paths {
+            data.extend(path.as_os_str().encode_wide());
+            data.push(0);
+        }
+        let message = COPYDATASTRUCT {
+            dwData: OPEN_FILES,
+            cbData: (data.len() * size_of::<u16>()) as u32,
+            lpData: data.as_mut_ptr().cast(),
+        };
+        let mut result = 0;
+        // SAFETY: `message` and `data` live until the call returns — WM_COPYDATA is synchronous
+        let sent = unsafe {
+            SendMessageTimeoutW(
+                window,
+                WM_COPYDATA,
+                0,
+                &message as *const COPYDATASTRUCT as LPARAM,
+                SMTO_ABORTIFHUNG,
+                SEND_TIMEOUT_MS,
+                &mut result,
+            )
+        };
+        if sent == 0 || result == 0 {
+            return false;
+        }
+        // The process started by Explorer may bring a window to the front; the running one may not
+        // SAFETY: a valid window handle
+        unsafe {
+            if IsIconic(window) != 0 {
+                ShowWindow(window, SW_RESTORE);
+            }
+            SetForegroundWindow(window);
+        }
+        true
+    }
+
+    /// The window of the running LMP — the one with our property
+    fn find_window() -> Option<HWND> {
+        unsafe extern "system" fn check(window: HWND, found: LPARAM) -> BOOL {
+            let prop = wide(WINDOW_PROP);
+            // SAFETY: `found` is the `Option<HWND>` from `find_window`, alive during EnumWindows
+            unsafe {
+                if !GetPropW(window, prop.as_ptr()).is_null() {
+                    *(found as *mut Option<HWND>) = Some(window);
+                    return 0;
+                }
+            }
+            1
+        }
+        let mut found: Option<HWND> = None;
+        // SAFETY: the callback only writes into `found`
+        unsafe { EnumWindows(Some(check), &mut found as *mut Option<HWND> as LPARAM) };
+        found
+    }
+
+    /// Marks the app window and starts accepting files from other LMP processes
+    pub(super) fn receive_files(cc: &eframe::CreationContext) {
+        let Ok(handle) = cc.window_handle() else {
+            return;
+        };
+        let RawWindowHandle::Win32(handle) = handle.as_raw() else {
+            return;
+        };
+        let window = handle.hwnd.get() as HWND;
+        let prop = wide(WINDOW_PROP);
+        // SAFETY: the window lives as long as the app; the subclass procedure is a plain function
+        unsafe {
+            // LMP started by the installer runs as administrator: without this, messages from
+            // processes started by Explorer wouldn't reach it
+            ChangeWindowMessageFilterEx(window, WM_COPYDATA, MSGFLT_ALLOW, ptr::null_mut());
+            SetWindowSubclass(window, Some(window_proc), 1, 0);
+            SetPropW(window, prop.as_ptr(), 1 as _);
+        }
+    }
+
+    unsafe extern "system" fn window_proc(
+        window: HWND,
+        message: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _id: usize,
+        _data: usize,
+    ) -> LRESULT {
+        if message == WM_COPYDATA {
+            // SAFETY: for WM_COPYDATA, lparam points to COPYDATASTRUCT, valid during the call
+            let copy = unsafe { &*(lparam as *const COPYDATASTRUCT) };
+            if copy.dwData == OPEN_FILES {
+                let len = copy.cbData as usize / size_of::<u16>();
+                let data: &[u16] = if len == 0 || copy.lpData.is_null() {
+                    &[]
+                } else {
+                    // SAFETY: the sender passed `cbData` bytes of UTF-16
+                    unsafe { std::slice::from_raw_parts(copy.lpData.cast::<u16>(), len) }
+                };
+                let paths = data
+                    .split(|&unit| unit == 0)
+                    .filter(|path| !path.is_empty())
+                    .map(|path| PathBuf::from(OsString::from_wide(path)))
+                    .collect();
+                super::push(paths);
+                return 1;
+            }
+        }
+        // SAFETY: the rest goes to winit's window procedure
+        unsafe { DefSubclassProc(window, message, wparam, lparam) }
     }
 }

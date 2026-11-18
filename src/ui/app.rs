@@ -160,7 +160,7 @@ impl PlayerApp {
             system_media: SystemMedia::new(cc),
             drop_cursor: file_drop::Cursor::new(cc),
         };
-        open_with::set_context(&cc.egui_ctx);
+        open_with::attach(cc);
         // The library was saved in an old format — re-read its tags once in the background
         if let Some(paths) = outdated {
             app.start_loading(Source::Files(paths), Destination::LibraryRefresh);

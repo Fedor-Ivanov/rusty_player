@@ -19,6 +19,13 @@ Unicode true
 !define PUBLISHER "Fedor Ivanov"
 ; Registry key for "Add or remove programs"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\LMP"
+; Opening audio files: the file type LMP opens, the app's entry for "Open with" and its
+; capabilities for "Default apps" in Settings
+!define PROG_ID "LMP.AudioFile"
+!define APP_KEY "Software\Classes\Applications\${APP_EXE}"
+!define CAPABILITIES_KEY "Software\${APP_NAME}\Capabilities"
+; SHChangeNotify(SHCNE_ASSOCCHANGED): Explorer re-reads the file associations right away
+!define NOTIFY_ASSOCIATIONS "shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)"
 
 ; Paths are relative to the script folder
 !define ROOT ".."
@@ -69,6 +76,30 @@ Function un.onInit
   SetShellVarContext all
 FunctionEnd
 
+; The extensions LMP opens — the same as SUPPORTED_EXTENSIONS in src/core/library/scan.rs.
+; ${Op} is a macro called for each of them
+!macro ForEachAudioExtension Op
+  !insertmacro ${Op} ".mp3"
+  !insertmacro ${Op} ".flac"
+  !insertmacro ${Op} ".wav"
+  !insertmacro ${Op} ".ogg"
+  !insertmacro ${Op} ".m4a"
+  !insertmacro ${Op} ".aac"
+!macroend
+
+; LMP goes into the extension's "Open with" list. The default app isn't changed: the user
+; picks LMP there or in "Default apps"
+!macro RegisterExtension Ext
+  WriteRegStr HKLM "Software\Classes\${Ext}\OpenWithProgids" "${PROG_ID}" ""
+  WriteRegStr HKLM "${APP_KEY}\SupportedTypes" "${Ext}" ""
+  WriteRegStr HKLM "${CAPABILITIES_KEY}\FileAssociations" "${Ext}" "${PROG_ID}"
+!macroend
+
+!macro UnregisterExtension Ext
+  DeleteRegValue HKLM "Software\Classes\${Ext}\OpenWithProgids" "${PROG_ID}"
+  DeleteRegKey /ifempty HKLM "Software\Classes\${Ext}\OpenWithProgids"
+!macroend
+
 Section "${APP_NAME}" SecApp
   ; The program itself is required — the checkbox can't be unchecked
   SectionIn RO
@@ -91,6 +122,26 @@ Section "${APP_NAME}" SecApp
   WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
 
+Section "Open audio files with LMP" SecFileTypes
+  ; The file type: how LMP opens a file (the app takes paths as arguments, see src/ui/open_with.rs)
+  WriteRegStr HKLM "Software\Classes\${PROG_ID}" "" "Audio file"
+  WriteRegStr HKLM "Software\Classes\${PROG_ID}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKLM "Software\Classes\${PROG_ID}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+
+  ; The app's entry: its name in "Open with"
+  WriteRegStr HKLM "${APP_KEY}" "FriendlyAppName" "${APP_NAME}"
+  WriteRegStr HKLM "${APP_KEY}\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKLM "${APP_KEY}\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+
+  ; Capabilities: LMP is listed in Settings → Default apps
+  WriteRegStr HKLM "${CAPABILITIES_KEY}" "ApplicationName" "${APP_NAME}"
+  WriteRegStr HKLM "${CAPABILITIES_KEY}" "ApplicationDescription" "Audio player"
+  WriteRegStr HKLM "Software\RegisteredApplications" "${APP_NAME}" "${CAPABILITIES_KEY}"
+
+  !insertmacro ForEachAudioExtension RegisterExtension
+  System::Call "${NOTIFY_ASSOCIATIONS}"
+SectionEnd
+
 Section "Desktop shortcut" SecDesktop
   CreateShortcut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
 SectionEnd
@@ -106,4 +157,12 @@ Section "Uninstall"
   Delete "$DESKTOP\${APP_NAME}.lnk"
 
   DeleteRegKey HKLM "${UNINSTALL_KEY}"
+
+  ; Opening audio files — whether or not it was chosen at install
+  !insertmacro ForEachAudioExtension UnregisterExtension
+  DeleteRegKey HKLM "Software\Classes\${PROG_ID}"
+  DeleteRegKey HKLM "${APP_KEY}"
+  DeleteRegKey HKLM "Software\${APP_NAME}"
+  DeleteRegValue HKLM "Software\RegisteredApplications" "${APP_NAME}"
+  System::Call "${NOTIFY_ASSOCIATIONS}"
 SectionEnd

@@ -71,12 +71,17 @@ objc2-app-kit = { version = "0.3", features = [
 # On Windows the window is rendered via OpenGL (glow), not wgpu — see window_glass.rs
 eframe = { version = "0.37", features = ["glow"] }
 window-vibrancy = "0.8.1"
-# Window glass (src/ui/style/window_glass.rs) and the cursor position while files are
-# dragged over the window (src/ui/file_drop.rs)
+# Window glass (src/ui/style/window_glass.rs), the cursor position while files are
+# dragged over the window (src/ui/file_drop.rs), handing opened files over to the running
+# LMP (src/ui/open_with.rs)
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_DataExchange",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 
