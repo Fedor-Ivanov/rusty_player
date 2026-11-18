@@ -246,6 +246,18 @@ impl PlayerController {
         Ok(())
     }
 
+    /// Appends tracks to the queue and starts playing the first added one — whatever was
+    /// playing before stays in the queue
+    pub fn play_added(&mut self, tracks: Vec<Track>) -> Result<(), String> {
+        if tracks.is_empty() {
+            return Ok(());
+        }
+        let first_new = self.player.track_list.tracks.len();
+        self.append_tracks(tracks);
+        self.select(first_new)?;
+        self.play()
+    }
+
     /// Replaces the whole queue with `tracks` and starts playback from the first of them,
     /// or, with shuffle on, from a random one
     pub fn play_all(&mut self, tracks: Vec<Track>) -> Result<(), String> {

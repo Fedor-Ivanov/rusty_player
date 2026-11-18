@@ -11,6 +11,10 @@ icon = ["assets/images/AppIcon.icns"]
 category = "public.app-category.music"
 short_description = "Audio player"
 
+[package.metadata.bundle.macos]
+# Audio types the app opens: without them Finder doesn't offer LMP in "Open With"
+info_plist_exts = ["assets/macos/document_types.plist"]
+
 [dependencies]
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
@@ -41,9 +45,20 @@ ureq = { version = "3.5.0", features = ["json"] }
 # System blur under the transparent window (see src/ui/style/window_glass.rs)
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSGeometry", "NSString", "NSThread"] }
+objc2-foundation = { version = "0.3", features = [
+    "NSAppleEventDescriptor",
+    "NSAppleEventManager",
+    "NSGeometry",
+    "NSNotification",
+    "NSString",
+    "NSThread",
+    "NSURL",
+    # Apple event types — for the "open documents" event (see src/ui/open_with.rs)
+    "objc2-core-services",
+] }
 objc2-app-kit = { version = "0.3", features = [
     "NSAppearance",
+    "NSApplication",
     "NSEvent",
     "NSGraphics",
     "NSResponder",

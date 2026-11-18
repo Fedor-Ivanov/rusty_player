@@ -8,7 +8,8 @@
 //! - `dialogs` — modal windows;
 //! - `components` — reusable elements, know nothing about the player;
 //! - `style` — colors, icons, window glass; `i18n` — translations;
-//! - `loading` — adding files; `covers` — cover cache.
+//! - `loading` — adding files; `covers` — cover cache;
+//! - `open_with` — files opened with the app from the system.
 
 mod action;
 mod app;
@@ -19,6 +20,7 @@ mod file_drop;
 mod i18n;
 mod loading;
 mod navigation;
+pub mod open_with;
 mod pages;
 mod panels;
 mod shortcuts;

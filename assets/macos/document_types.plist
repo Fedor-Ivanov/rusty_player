@@ -1,0 +1,40 @@
+<!--
+  A fragment of Info.plist: cargo-bundle inserts it as is into the bundle's top-level <dict>
+  (info_plist_exts in Cargo.toml), so there is no <plist> wrapper here.
+  The audio types LMP opens — the same formats as SUPPORTED_EXTENSIONS in src/core/library/scan.rs.
+  Without this list Finder doesn't offer the app in "Open With" and refuses to open files with it.
+-->
+<key>CFBundleDocumentTypes</key>
+<array>
+  <dict>
+    <key>CFBundleTypeName</key>
+    <string>Audio</string>
+    <key>CFBundleTypeRole</key>
+    <string>Viewer</string>
+    <!-- Alternate: LMP is listed in "Open With" but doesn't take over the default app -->
+    <key>LSHandlerRank</key>
+    <string>Alternate</string>
+    <key>LSItemContentTypes</key>
+    <array>
+      <string>public.mp3</string>
+      <string>org.xiph.flac</string>
+      <string>com.microsoft.waveform-audio</string>
+      <string>public.mpeg-4-audio</string>
+      <string>com.apple.m4a-audio</string>
+      <string>public.aac-audio</string>
+    </array>
+  </dict>
+  <dict>
+    <!-- macOS doesn't declare a type for Ogg — matched by extension -->
+    <key>CFBundleTypeName</key>
+    <string>Ogg Audio</string>
+    <key>CFBundleTypeRole</key>
+    <string>Viewer</string>
+    <key>LSHandlerRank</key>
+    <string>Alternate</string>
+    <key>CFBundleTypeExtensions</key>
+    <array>
+      <string>ogg</string>
+    </array>
+  </dict>
+</array>

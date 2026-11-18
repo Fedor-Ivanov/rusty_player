@@ -35,6 +35,9 @@ pub(crate) enum Destination {
     Library,
     /// Just to listen now, they don't go into the library
     Queue,
+    /// Opened with the app from the system ("Open With", double click): to the queue,
+    /// and the first of them starts playing right away
+    Play,
     /// Re-read the tags of tracks already in the library (after a format change)
     LibraryRefresh,
 }
@@ -49,7 +52,7 @@ impl PendingLoad {
     /// Progress banner text with `{done}` and `{total}` — depends on what we're doing
     pub(crate) fn progress_template(&self) -> &'static str {
         match self.destination {
-            Destination::Library | Destination::Queue => t().adding_progress,
+            Destination::Library | Destination::Queue | Destination::Play => t().adding_progress,
             Destination::LibraryRefresh => t().updating_library_progress,
         }
     }
@@ -64,7 +67,7 @@ impl PlayerApp {
         );
         let id_salt = match destination {
             Destination::Library => "add_to_library",
-            Destination::Queue => "add_to_queue",
+            Destination::Queue | Destination::Play => "add_to_queue",
             Destination::LibraryRefresh => "refresh_library",
         };
         let add =
@@ -138,7 +141,7 @@ impl PlayerApp {
         // folder again adds only new files
         let skip = match destination {
             Destination::Library => self.core.library.paths().clone(),
-            Destination::Queue | Destination::LibraryRefresh => HashSet::new(),
+            Destination::Queue | Destination::Play | Destination::LibraryRefresh => HashSet::new(),
         };
         self.loaders.push_back(PendingLoad {
             loader: Loader::start(source, skip),
@@ -198,6 +201,10 @@ impl PlayerApp {
                 }
                 Destination::Queue => {
                     let result = self.core.controller.add_tracks(finished.tracks);
+                    self.report_error(result);
+                }
+                Destination::Play => {
+                    let result = self.core.controller.play_added(finished.tracks);
                     self.report_error(result);
                 }
                 Destination::LibraryRefresh => unreachable!("handled above"),

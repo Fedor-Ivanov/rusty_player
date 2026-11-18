@@ -32,6 +32,9 @@ fn main() -> eframe::Result {
         ..Default::default()
     };
 
+    // Files opened with the app ("Open With", double click, command line arguments)
+    ui::open_with::install();
+
     eframe::run_native(
         APP_NAME,
         options,

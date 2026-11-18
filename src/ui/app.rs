@@ -17,6 +17,7 @@ use super::{
     file_drop, i18n,
     loading::{Destination, PendingLoad},
     navigation::Route,
+    open_with,
     pages::LibrarySearch,
     style::theme::window_tint,
     system_media::SystemMedia,
@@ -159,6 +160,7 @@ impl PlayerApp {
             system_media: SystemMedia::new(cc),
             drop_cursor: file_drop::Cursor::new(cc),
         };
+        open_with::set_context(&cc.egui_ctx);
         // The library was saved in an old format — re-read its tags once in the background
         if let Some(paths) = outdated {
             app.start_loading(Source::Files(paths), Destination::LibraryRefresh);
@@ -225,6 +227,14 @@ impl eframe::App for PlayerApp {
         // Library: the background missing-files check answer, background write errors
         if let Some(e) = self.core.poll_background() {
             self.report_error(Err(e));
+        }
+        // Files opened with the app from the system — play them
+        let opened = open_with::take();
+        if !opened.is_empty() {
+            self.dispatch(Action::AddPaths {
+                paths: opened,
+                destination: Destination::Play,
+            });
         }
         self.poll_loaders(ctx);
         self.apply_actions(ctx);
